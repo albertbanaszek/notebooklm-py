@@ -5,7 +5,8 @@ needs ``ProactorEventLoop`` on Windows to start its driver subprocess. The CLI
 no longer installs a policy (it passes a loop factory to ``asyncio.Runner``),
 so the guard here only acts when something else did: a Python API caller that
 set ``WindowsSelectorEventLoopPolicy``, or the CLI's selector opt-in on Python
-3.10, which has no loop factory. ``browser_capture`` re-exports it.
+3.10 (no loop factory), which holds that policy while a command runs, e.g.
+during headless re-auth in a worker thread. ``browser_capture`` re-exports it.
 """
 
 from __future__ import annotations

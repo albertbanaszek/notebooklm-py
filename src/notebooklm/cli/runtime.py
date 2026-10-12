@@ -13,7 +13,8 @@ On Python 3.11+ the choice is passed to ``asyncio.Runner`` as a loop factory
 and the global event-loop policy is never touched, so Playwright's sync API,
 which builds its own loop from that policy, keeps the Proactor loop it needs to
 start the browser driver (#89). Python 3.10 has no loop factory, so there the
-opt-in falls back to setting the policy, which 3.10 does not deprecate.
+opt-in sets the policy (which 3.10 does not deprecate) for the duration of each
+run and then restores it.
 """
 
 from __future__ import annotations
@@ -117,11 +118,26 @@ def _windows_loop_policy(choice: str) -> asyncio.AbstractEventLoopPolicy:
 def _run_with_windows_loop(coro, choice: str):
     logger.debug("Running CLI command on the %s event loop (%s)", choice, WINDOWS_EVENT_LOOP_ENV)
     runner_cls = getattr(asyncio, "Runner", None)
-    if runner_cls is not None:
-        with runner_cls(loop_factory=_windows_loop_factory(choice)) as runner:
-            return runner.run(coro)
-    asyncio.set_event_loop_policy(_windows_loop_policy(choice))
-    return asyncio.run(coro)
+    try:
+        if runner_cls is not None:
+            with runner_cls(loop_factory=_windows_loop_factory(choice)) as runner:
+                return runner.run(coro)
+        # Python 3.10: set the policy for this run only, so code that runs
+        # afterwards (e.g. Playwright's own loop) gets the default again.
+        original_policy = asyncio.get_event_loop_policy()
+        asyncio.set_event_loop_policy(_windows_loop_policy(choice))
+        try:
+            return asyncio.run(coro)
+        finally:
+            asyncio.set_event_loop_policy(original_policy)
+    except BaseException:
+        # If the loop itself could not be created, the coroutine never started;
+        # close it so the real error is not followed by "never awaited". This
+        # is a no-op for a coroutine that ran.
+        close = getattr(coro, "close", None)
+        if close is not None:
+            close()
+        raise
 
 
 def run_async(coro):

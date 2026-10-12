@@ -267,6 +267,61 @@ def test_windows_event_loop_noop_off_win32(monkeypatch) -> None:
         pass  # no exception, nothing swapped
 
 
+def _deprecated_policy_api(monkeypatch, original: object) -> list[object]:
+    """Fake a 3.14-style policy API whose every call warns DeprecationWarning."""
+    import asyncio
+    import warnings
+
+    class _SelectorPolicy:
+        pass
+
+    class _DefaultPolicy:
+        def __init__(self) -> None:
+            warnings.warn("DefaultEventLoopPolicy is deprecated", DeprecationWarning, stacklevel=2)
+
+    current = [original]
+    swapped: list[object] = []
+
+    def get_policy():
+        warnings.warn("get_event_loop_policy is deprecated", DeprecationWarning, stacklevel=2)
+        return current[0]
+
+    def set_policy(policy):
+        warnings.warn("set_event_loop_policy is deprecated", DeprecationWarning, stacklevel=2)
+        current[0] = policy
+        swapped.append(policy)
+
+    # Patch before faking win32; see the comment in the swap test above.
+    monkeypatch.setattr(asyncio, "get_event_loop_policy", get_policy)
+    monkeypatch.setattr(asyncio, "set_event_loop_policy", set_policy)
+    monkeypatch.setattr(asyncio, "DefaultEventLoopPolicy", _DefaultPolicy)
+    monkeypatch.setattr(asyncio, "WindowsSelectorEventLoopPolicy", _SelectorPolicy, raising=False)
+    monkeypatch.setattr(playwright_event_loop.sys, "platform", "win32")
+    if original is None:
+        current[0] = _SelectorPolicy()
+    return swapped
+
+
+def test_windows_event_loop_restores_policy_when_playwright_raises(monkeypatch) -> None:
+    swapped = _deprecated_policy_api(monkeypatch, None)
+    with pytest.raises(ValueError), windows_playwright_event_loop():
+        raise ValueError("Playwright failed")
+    assert len(swapped) == 2
+    assert type(swapped[-1]).__name__ == "_SelectorPolicy"
+
+
+def test_windows_event_loop_hides_policy_api_deprecation_warnings(monkeypatch) -> None:
+    """The guard's own policy calls must not surface 3.14+ DeprecationWarnings."""
+    import warnings
+
+    swapped = _deprecated_policy_api(monkeypatch, None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with windows_playwright_event_loop():
+            pass
+    assert len(swapped) == 2
+
+
 # ---------------------------------------------------------------------------
 # ensure_chromium_installed — detection contract (#2031)
 # ---------------------------------------------------------------------------

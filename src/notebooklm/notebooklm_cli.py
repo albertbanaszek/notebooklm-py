@@ -77,12 +77,7 @@ def _configure_windows_runtime() -> None:
 
     # The event loop is no longer chosen here. Commands run on asyncio's default
     # (Proactor) loop unless NOTEBOOKLM_WINDOWS_EVENT_LOOP opts into the selector
-    # loop (#79); see cli/runtime.py. On Proactor, curl_cffi starts a helper
-    # selector thread and warns, advising the selector policy this CLI no longer
-    # installs because of #2485. The fallback works, so hide that advice.
-    warnings.filterwarnings(
-        "ignore", message=r"\s*Proactor event loop does not implement add_reader"
-    )
+    # loop (#79); see cli/runtime.py.
 
     # Fix #80/#318: changing PYTHONUTF8 after startup does not update the already
     # created stdout/stderr TextIOWrappers. Reconfigure the live streams so Rich's
@@ -121,7 +116,7 @@ from .cli import (
     source,
     usage,
 )
-from .cli.grouped import SectionedGroup
+from .cli.grouped import ConfigurationClickException, SectionedGroup
 
 # Public surface (ADR-0012). ``main`` is the ``[project.scripts]`` entry
 # point and ``src/notebooklm/__main__.py`` shim; ``cli`` is the root
@@ -214,9 +209,13 @@ def cli(ctx, storage, profile, backend, verbose, quiet):
     from .exceptions import ConfigurationError
 
     try:
-        windows_event_loop_choice()
+        loop_choice = windows_event_loop_choice()
     except ConfigurationError as e:
-        raise click.ClickException(str(e)) from None
+        raise ConfigurationClickException(str(e)) from None
+    if sys.platform == "win32":
+        logging.getLogger(__name__).debug(
+            "Windows event loop: %s", loop_choice or "proactor (asyncio default)"
+        )
 
     # Set up profile system
     from .paths import set_active_profile
@@ -339,7 +338,25 @@ def completion_cmd(shell: str) -> None:
 # =============================================================================
 
 
+def _hide_curl_cffi_proactor_advice() -> None:
+    """Hide curl_cffi's Proactor warning in a Windows CLI process.
+
+    On the Proactor loop curl_cffi starts a helper selector thread and warns,
+    advising the selector policy this CLI no longer installs because of #2485.
+    The fallback works, so the advice only misleads. Installed from ``main()``
+    rather than at import, so applications importing this module keep their
+    own warning filters.
+    """
+    if sys.platform == "win32":
+        warnings.filterwarnings(
+            "ignore",
+            message=r"\s*Proactor event loop does not implement add_reader",
+            category=UserWarning,
+        )
+
+
 def main():
+    _hide_curl_cffi_proactor_advice()
     cli()
 
 

@@ -17,10 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Commands now use the Proactor loop, like `notebooklm-mcp`,
   `notebooklm-server` and the Python API. If commands hang inside a sandbox
   such as Sandboxie-Plus (#75), set `NOTEBOOKLM_WINDOWS_EVENT_LOOP=selector`;
-  an unknown value fails before the command starts. The CLI no longer uses the
-  event-loop policy API that Python 3.16 removes, `login --master-token` now
-  runs through the same loop selection, and the CLI hides curl_cffi's Proactor
-  warning, whose advice to install the selector policy no longer applies.
+  an unknown value fails before the command starts. On Python 3.11+ the CLI no
+  longer uses the event-loop policy API that Python 3.16 removes,
+  `login --master-token` now runs through the same loop selection, and the CLI
+  hides curl_cffi's Proactor warning, whose advice to install the selector
+  policy no longer applies.
 
 ## [0.8.5] - 2026-10-12
 

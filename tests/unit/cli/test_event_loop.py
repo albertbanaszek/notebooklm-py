@@ -100,6 +100,9 @@ class TestRunAsyncLoopSelection:
         loop_type = runtime.run_async(_running_loop_type())
         assert loop_type not in (_FakeSelectorLoop, _FakeProactorLoop)
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="faking linux on a real Windows loop is not meaningful"
+    )
     def test_off_windows_ignores_the_variable(self, monkeypatch):
         monkeypatch.setattr(runtime.sys, "platform", "linux")
         monkeypatch.setenv(ENV, "selector")
@@ -144,10 +147,31 @@ class TestRunAsyncLoopSelection:
             outer_loop.close()
         assert "existing event loop" in str(err)
 
-    def test_python_310_falls_back_to_the_policy(self, monkeypatch):
+    @pytest.mark.skipif(not hasattr(asyncio, "Runner"), reason="loop factories need 3.11+")
+    @pytest.mark.usefixtures("simulated_windows")
+    def test_loop_creation_failure_closes_the_coroutine(self, monkeypatch):
+        """If the loop can't be built, the error surfaces without 'never awaited'."""
+
+        def broken_loop():
+            raise OSError("IOCP unavailable")
+
+        monkeypatch.setattr(asyncio, "SelectorEventLoop", broken_loop)
+        monkeypatch.setenv(ENV, "selector")
+        coro = asyncio.sleep(0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            with pytest.raises(OSError, match="IOCP unavailable"):
+                runtime.run_async(coro)
+        assert coro.cr_frame is None
+
+    @pytest.mark.parametrize("choice", ["selector", "proactor"])
+    def test_python_310_falls_back_to_the_policy(self, monkeypatch, choice):
         """Without ``asyncio.Runner`` the opt-in sets the (undeprecated) policy."""
 
         class _SelectorPolicy:
+            pass
+
+        class _ProactorPolicy:
             pass
 
         policies: list[object] = []
@@ -162,14 +186,22 @@ class TestRunAsyncLoopSelection:
         monkeypatch.setattr(
             asyncio, "WindowsSelectorEventLoopPolicy", _SelectorPolicy, raising=False
         )
+        monkeypatch.setattr(
+            asyncio, "WindowsProactorEventLoopPolicy", _ProactorPolicy, raising=False
+        )
+        original_policy = object()
+        monkeypatch.setattr(asyncio, "get_event_loop_policy", lambda: original_policy)
         monkeypatch.setattr(asyncio, "set_event_loop_policy", policies.append)
         monkeypatch.setattr(asyncio, "run", fake_run)
         monkeypatch.setattr(runtime.sys, "platform", "win32")
-        monkeypatch.setenv(ENV, "selector")
+        monkeypatch.setenv(ENV, choice)
 
         assert runtime.run_async(asyncio.sleep(0)) == "ran"
         assert len(runs) == 1
-        assert [type(policy) for policy in policies] == [_SelectorPolicy]
+        expected = _SelectorPolicy if choice == "selector" else _ProactorPolicy
+        # Set for the run, then the caller's policy is put back.
+        assert type(policies[0]) is expected
+        assert policies[1:] == [original_policy]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")

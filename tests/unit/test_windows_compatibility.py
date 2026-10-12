@@ -53,7 +53,11 @@ class TestPlaywrightSmokeTest:
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only smoke test")
     @pytest.mark.usefixtures("restore_event_loop_policy")
     def test_playwright_initializes_after_selector_opt_in(self, monkeypatch):
-        """The selector opt-in must not leave Playwright on the selector loop (#89)."""
+        """Playwright still starts after the selector opt-in (#89).
+
+        On Python 3.10 the opt-in sets the selector policy only while a command
+        runs and then restores it; on 3.11+ the policy is never touched.
+        """
         from notebooklm.cli.runtime import run_async
 
         monkeypatch.setenv("NOTEBOOKLM_WINDOWS_EVENT_LOOP", "selector")
@@ -96,7 +100,7 @@ class TestPlaywrightEventLoopFix:
 
     def test_context_manager_is_noop_on_non_windows(self):
         """Verify context manager is a no-op on non-Windows platforms."""
-        # Mock ``sys.platform`` to non-Windows; the service reads the same
+        # Mock ``sys.platform`` to non-Windows; the guard reads the same
         # process-wide ``sys`` module object.
         with (
             patch.object(sys, "platform", "linux"),
@@ -149,9 +153,15 @@ class TestWindowsEventLoopPolicy:
 
     It used to install WindowsSelectorEventLoopPolicy at import (#79), which
     broke Playwright (#89) and, on CPython 3.12-3.14, lost upload data (#2485).
-    The selector loop is now opt-in via NOTEBOOKLM_WINDOWS_EVENT_LOOP and is
-    passed to the runner as a loop factory, never as a global policy.
+    The selector loop is now opt-in via NOTEBOOKLM_WINDOWS_EVENT_LOOP. On Python
+    3.11+ it is passed to the runner as a loop factory and the global policy is
+    untouched; Python 3.10 falls back to setting the policy.
     """
+
+    _CURL_CFFI_ADVICE = (
+        "\n    Proactor event loop does not implement add_reader family of methods "
+        "required.\n    Registering an additional selector thread for add_reader support."
+    )
 
     def test_windows_runtime_installs_no_event_loop_policy(self, monkeypatch):
         """Simulated Windows startup must leave the event-loop policy alone."""
@@ -167,51 +177,112 @@ class TestWindowsEventLoopPolicy:
         )
         monkeypatch.delenv("PYTHONUTF8", raising=False)
 
-        with warnings.catch_warnings():
-            notebooklm_cli._configure_windows_runtime()
+        notebooklm_cli._configure_windows_runtime()
 
-    def test_windows_runtime_hides_curl_cffi_proactor_advice(self, monkeypatch):
-        """curl_cffi's 'use the selector policy' warning is hidden; others are not."""
+    def _emitted_after(self, setup) -> list[str]:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            setup()
+            warnings.warn(self._CURL_CFFI_ADVICE, UserWarning, stacklevel=1)
+            warnings.warn("an unrelated warning", UserWarning, stacklevel=1)
+        return ["curl_cffi" if "Proactor" in str(w.message) else str(w.message) for w in caught]
+
+    def test_cli_main_hides_curl_cffi_proactor_advice_on_windows(self, monkeypatch):
+        """The CLI hides curl_cffi's 'use the selector policy' warning; others stay."""
+        from notebooklm import notebooklm_cli
+
+        monkeypatch.setattr(notebooklm_cli.sys, "platform", "win32")
+        emitted = self._emitted_after(notebooklm_cli._hide_curl_cffi_proactor_advice)
+        assert emitted == ["an unrelated warning"]
+
+    def test_curl_cffi_advice_is_kept_off_windows(self, monkeypatch):
+        from notebooklm import notebooklm_cli
+
+        monkeypatch.setattr(notebooklm_cli.sys, "platform", "linux")
+        emitted = self._emitted_after(notebooklm_cli._hide_curl_cffi_proactor_advice)
+        assert emitted == ["curl_cffi", "an unrelated warning"]
+
+    def test_importing_the_cli_does_not_install_the_filter(self, monkeypatch):
+        """Applications that import the CLI module keep their warning filters."""
         from notebooklm import notebooklm_cli
 
         monkeypatch.setattr(notebooklm_cli.sys, "platform", "win32")
         monkeypatch.setattr(notebooklm_cli.sys, "stdout", None)
         monkeypatch.setattr(notebooklm_cli.sys, "stderr", None)
         monkeypatch.delenv("PYTHONUTF8", raising=False)
-        curl_cffi_advice = (
-            "\n    Proactor event loop does not implement add_reader family of methods "
-            "required.\n    Registering an additional selector thread for add_reader support."
-        )
+        emitted = self._emitted_after(notebooklm_cli._configure_windows_runtime)
+        assert emitted == ["curl_cffi", "an unrelated warning"]
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            notebooklm_cli._configure_windows_runtime()
-            warnings.warn(curl_cffi_advice, UserWarning, stacklevel=1)
-            warnings.warn("an unrelated warning", UserWarning, stacklevel=1)
-
-        assert [str(w.message) for w in caught] == ["an unrelated warning"]
-
-    def test_bad_event_loop_value_fails_before_the_command_runs(self, monkeypatch, tmp_path):
+    @pytest.mark.parametrize(
+        ("args", "expect_json"), [(["status"], False), (["status", "--json"], True)]
+    )
+    def test_bad_event_loop_value_fails_before_the_command_runs(
+        self, monkeypatch, tmp_path, args, expect_json
+    ):
         """A typo is rejected by the root group, before e.g. a login starts.
 
         ``status`` needs no event loop and succeeds on its own, so it only
         fails here if the root group checks the variable first.
         """
+        import json
+
         from click.testing import CliRunner
 
         from notebooklm.cli import runtime
-        from notebooklm.exceptions import ConfigurationError
         from notebooklm.notebooklm_cli import cli
 
-        def reject():
-            raise ConfigurationError("Unknown NOTEBOOKLM_WINDOWS_EVENT_LOOP='selectr'")
-
         monkeypatch.setenv("NOTEBOOKLM_HOME", str(tmp_path))
-        monkeypatch.setattr(runtime, "windows_event_loop_choice", reject)
-        result = CliRunner().invoke(cli, ["status"])
+        monkeypatch.setenv("NOTEBOOKLM_WINDOWS_EVENT_LOOP", "selectr")
+        monkeypatch.setattr(runtime.sys, "platform", "win32")
+        result = CliRunner().invoke(cli, args)
+        monkeypatch.undo()
 
         assert result.exit_code == 1
-        assert "NOTEBOOKLM_WINDOWS_EVENT_LOOP='selectr'" in result.output
+        if expect_json:
+            payload = json.loads(result.stdout)
+            assert payload["code"] == "CONFIG_ERROR"
+            assert "NOTEBOOKLM_WINDOWS_EVENT_LOOP='selectr'" in payload["message"]
+        else:
+            assert "NOTEBOOKLM_WINDOWS_EVENT_LOOP='selectr'" in result.output
+
+    def test_valid_event_loop_value_is_accepted(self, monkeypatch, tmp_path):
+        from click.testing import CliRunner
+
+        from notebooklm.cli import runtime
+        from notebooklm.notebooklm_cli import cli
+
+        monkeypatch.setenv("NOTEBOOKLM_HOME", str(tmp_path))
+        monkeypatch.setenv("NOTEBOOKLM_WINDOWS_EVENT_LOOP", "Selector")
+        monkeypatch.setattr(runtime.sys, "platform", "win32")
+        result = CliRunner().invoke(cli, ["status"])
+        monkeypatch.undo()
+
+        assert result.exit_code == 0, result.output
+
+    def test_only_the_owners_touch_the_event_loop_policy(self):
+        """Nothing in the package installs a selector policy except the two owners.
+
+        Runs on every OS, so a policy call reintroduced at CLI import fails
+        Linux and macOS CI too, not only the Windows cell.
+        """
+        import ast
+        from pathlib import Path
+
+        import notebooklm
+
+        package_root = Path(notebooklm.__file__).parent
+        owners = {"cli/runtime.py", "_browser/playwright_event_loop.py"}
+        offenders = []
+        for path in package_root.rglob("*.py"):
+            relative = path.relative_to(package_root).as_posix()
+            if relative in owners:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                name = getattr(node, "attr", None) or getattr(node, "id", None)
+                if name in {"set_event_loop_policy", "WindowsSelectorEventLoopPolicy"}:
+                    offenders.append(f"{relative}:{node.lineno}")
+        assert offenders == []
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
     def test_cli_import_keeps_default_policy(self):

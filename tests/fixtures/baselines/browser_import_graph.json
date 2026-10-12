@@ -143,7 +143,7 @@
       "path": "src/notebooklm/_browser/oauth_token.py"
     },
     {
-      "lines": 49,
+      "lines": 50,
       "name": "playwright_event_loop",
       "path": "src/notebooklm/_browser/playwright_event_loop.py"
     }
@@ -156,7 +156,7 @@
     "function_local_edges": 1,
     "module_edges": 21,
     "modules": 7,
-    "total_lines": 3095,
+    "total_lines": 3096,
     "unique_edges": 22
   },
   "version": 1
