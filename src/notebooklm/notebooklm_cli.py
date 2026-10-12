@@ -45,9 +45,9 @@ from ._version_check import check_python_version as _check_python_version
 _check_python_version()
 del _check_python_version
 
-import asyncio
 import logging
 import os
+import warnings
 from pathlib import Path
 
 # =============================================================================
@@ -75,10 +75,14 @@ def _configure_windows_runtime() -> None:
     if sys.platform != "win32":
         return
 
-    # Fix #79: Windows asyncio ProactorEventLoop can hang indefinitely at IOCP layer
-    # (GetQueuedCompletionStatus) in certain environments like Sandboxie.
-    # SelectorEventLoop avoids this issue.
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # The event loop is no longer chosen here. Commands run on asyncio's default
+    # (Proactor) loop unless NOTEBOOKLM_WINDOWS_EVENT_LOOP opts into the selector
+    # loop (#79); see cli/runtime.py. On Proactor, curl_cffi starts a helper
+    # selector thread and warns, advising the selector policy this CLI no longer
+    # installs because of #2485. The fallback works, so hide that advice.
+    warnings.filterwarnings(
+        "ignore", message=r"\s*Proactor event loop does not implement add_reader"
+    )
 
     # Fix #80/#318: changing PYTHONUTF8 after startup does not update the already
     # created stdout/stderr TextIOWrappers. Reconfigure the live streams so Rich's
@@ -203,6 +207,16 @@ def cli(ctx, storage, profile, backend, verbose, quiet):
         install_redaction("httpx", "urllib3")
     elif verbose == 1:
         logging.getLogger("notebooklm").setLevel(logging.INFO)
+
+    # Reject a bad NOTEBOOKLM_WINDOWS_EVENT_LOOP before a command does work it
+    # would throw away (e.g. an interactive login whose result it never saves).
+    from .cli.runtime import windows_event_loop_choice
+    from .exceptions import ConfigurationError
+
+    try:
+        windows_event_loop_choice()
+    except ConfigurationError as e:
+        raise click.ClickException(str(e)) from None
 
     # Set up profile system
     from .paths import set_active_profile

@@ -1,12 +1,45 @@
-"""CLI runtime primitives."""
+"""CLI runtime primitives.
+
+Windows event loop (#75, #79, #2485): CLI commands run on asyncio's default
+event loop, which on Windows is ``ProactorEventLoop``, the same loop
+``notebooklm-mcp``, ``notebooklm-server`` and the Python API use.
+``NOTEBOOKLM_WINDOWS_EVENT_LOOP=selector`` opts a Windows CLI process into
+``SelectorEventLoop`` instead, for environments where the Proactor loop hangs
+(the one report so far came from a Sandboxie-Plus box, #75).
+``NOTEBOOKLM_WINDOWS_EVENT_LOOP=proactor`` forces the Proactor loop even if
+something in the process installed a different event-loop policy.
+
+On Python 3.11+ the choice is passed to ``asyncio.Runner`` as a loop factory
+and the global event-loop policy is never touched, so Playwright's sync API,
+which builds its own loop from that policy, keeps the Proactor loop it needs to
+start the browser driver (#89). Python 3.10 has no loop factory, so there the
+opt-in falls back to setting the policy, which 3.10 does not deprecate.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
+import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING
+
+from ..exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     import click
+
+logger = logging.getLogger(__name__)
+
+WINDOWS_EVENT_LOOP_ENV = "NOTEBOOKLM_WINDOWS_EVENT_LOOP"
+WINDOWS_EVENT_LOOP_CHOICES = ("proactor", "selector")
+
+_NESTED_LOOP_MESSAGE = (
+    "Cannot run sync CLI command from within an existing event loop. "
+    "Use the async API (``async with NotebookLMClient(...)``) directly "
+    "instead of invoking the sync CLI helper from async code."
+)
 
 
 def is_quiet(ctx: click.Context | None = None) -> bool:
@@ -47,6 +80,50 @@ def is_quiet(ctx: click.Context | None = None) -> bool:
     return value if isinstance(value, bool) else False
 
 
+def windows_event_loop_choice() -> str | None:
+    """Return the event loop requested for Windows, or None for asyncio's default.
+
+    Always None off Windows, where the variable has no effect. An unrecognised
+    value raises ``ConfigurationError`` so a typo fails loudly instead of
+    silently running on the default loop.
+    """
+    if sys.platform != "win32":
+        return None
+    value = os.environ.get(WINDOWS_EVENT_LOOP_ENV, "").strip().lower()
+    if not value:
+        return None
+    if value not in WINDOWS_EVENT_LOOP_CHOICES:
+        raise ConfigurationError(
+            f"Unknown {WINDOWS_EVENT_LOOP_ENV}={value!r}; "
+            f"expected one of {list(WINDOWS_EVENT_LOOP_CHOICES)} or unset."
+        )
+    return value
+
+
+def _windows_loop_factory(choice: str) -> Callable[[], asyncio.AbstractEventLoop]:
+    if sys.platform == "win32":
+        return asyncio.ProactorEventLoop if choice == "proactor" else asyncio.SelectorEventLoop
+    raise RuntimeError("Windows event loops are only available on Windows")
+
+
+def _windows_loop_policy(choice: str) -> asyncio.AbstractEventLoopPolicy:
+    if sys.platform == "win32":
+        if choice == "proactor":
+            return asyncio.WindowsProactorEventLoopPolicy()
+        return asyncio.WindowsSelectorEventLoopPolicy()
+    raise RuntimeError("Windows event loop policies are only available on Windows")
+
+
+def _run_with_windows_loop(coro, choice: str):
+    logger.debug("Running CLI command on the %s event loop (%s)", choice, WINDOWS_EVENT_LOOP_ENV)
+    runner_cls = getattr(asyncio, "Runner", None)
+    if runner_cls is not None:
+        with runner_cls(loop_factory=_windows_loop_factory(choice)) as runner:
+            return runner.run(coro)
+    asyncio.set_event_loop_policy(_windows_loop_policy(choice))
+    return asyncio.run(coro)
+
+
 def run_async(coro):
     """Run async coroutine in sync context.
 
@@ -59,7 +136,24 @@ def run_async(coro):
     Nested event loops are intentionally not supported (no ``nest_asyncio``,
     no ``loop.run_until_complete`` fallback): the CLI assumes a single
     top-level ``asyncio.run`` invariant.
+
+    On Windows, ``NOTEBOOKLM_WINDOWS_EVENT_LOOP`` can pick the event loop (see
+    the module docstring); otherwise asyncio's default is used.
     """
+    try:
+        choice = windows_event_loop_choice()
+    except ConfigurationError:
+        coro.close()
+        raise
+    if choice is not None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return _run_with_windows_loop(coro, choice)
+        # Check before creating the loop: a Runner entered inside a running
+        # loop fails again while shutting down and hides the original error.
+        coro.close()
+        raise RuntimeError(_NESTED_LOOP_MESSAGE)
     try:
         return asyncio.run(coro)
     except RuntimeError as exc:
@@ -72,8 +166,4 @@ def run_async(coro):
         if "running event loop" not in str(exc):
             raise
         coro.close()
-        raise RuntimeError(
-            "Cannot run sync CLI command from within an existing event loop. "
-            "Use the async API (``async with NotebookLMClient(...)``) directly "
-            "instead of invoking the sync CLI helper from async code."
-        ) from exc
+        raise RuntimeError(_NESTED_LOOP_MESSAGE) from exc

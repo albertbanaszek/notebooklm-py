@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import notebooklm._app.login_browser as login_browser
-import notebooklm._browser.browser_capture as browser_capture
+import notebooklm._browser.playwright_event_loop as playwright_event_loop
 from notebooklm._app.login_browser import (
     BrowserLoginPlan,
     LoginFlagConflict,
@@ -190,10 +190,13 @@ def test_repair_metadata_degrades_on_run_async_runtime_error(tmp_path) -> None:
 # windows_playwright_event_loop — win32 policy swap (500-505)
 # ---------------------------------------------------------------------------
 def test_windows_event_loop_swaps_and_restores_policy(monkeypatch) -> None:
-    """On win32 the context manager swaps in the default policy and restores."""
+    """On win32 a selector policy is swapped for the default one, then restored."""
     import asyncio
 
-    sentinel_original = object()
+    class _SelectorPolicy:
+        pass
+
+    sentinel_original = _SelectorPolicy()
     swapped_policies: list[Any] = []
 
     class _DefaultPolicy:
@@ -211,7 +214,8 @@ def test_windows_event_loop_swaps_and_restores_policy(monkeypatch) -> None:
         asyncio, "set_event_loop_policy", lambda policy: swapped_policies.append(policy)
     )
     monkeypatch.setattr(asyncio, "DefaultEventLoopPolicy", _DefaultPolicy)
-    monkeypatch.setattr(browser_capture.sys, "platform", "win32")
+    monkeypatch.setattr(asyncio, "WindowsSelectorEventLoopPolicy", _SelectorPolicy, raising=False)
+    monkeypatch.setattr(playwright_event_loop.sys, "platform", "win32")
     with windows_playwright_event_loop():
         # First swap installs a fresh DefaultEventLoopPolicy.
         assert isinstance(swapped_policies[-1], _DefaultPolicy)
@@ -219,9 +223,46 @@ def test_windows_event_loop_swaps_and_restores_policy(monkeypatch) -> None:
     assert swapped_policies[-1] is sentinel_original
 
 
+def test_windows_event_loop_keeps_a_non_selector_policy(monkeypatch) -> None:
+    """On win32 any other policy (the default Proactor one) is left alone."""
+    import asyncio
+
+    class _SelectorPolicy:
+        pass
+
+    # Patch before faking win32; see the comment in the swap test above.
+    monkeypatch.setattr(asyncio, "get_event_loop_policy", object)
+    monkeypatch.setattr(
+        asyncio,
+        "set_event_loop_policy",
+        lambda policy: pytest.fail("a non-selector policy must not be swapped"),
+    )
+    monkeypatch.setattr(asyncio, "WindowsSelectorEventLoopPolicy", _SelectorPolicy, raising=False)
+    monkeypatch.setattr(playwright_event_loop.sys, "platform", "win32")
+    with windows_playwright_event_loop():
+        pass
+
+
+def test_windows_event_loop_noop_without_policy_api(monkeypatch) -> None:
+    """On Pythons without the policy API (3.16+) the context manager does nothing."""
+    import asyncio
+
+    monkeypatch.delattr(asyncio, "get_event_loop_policy", raising=False)
+    monkeypatch.setattr(asyncio, "WindowsSelectorEventLoopPolicy", object, raising=False)
+    monkeypatch.setattr(
+        asyncio,
+        "set_event_loop_policy",
+        lambda policy: pytest.fail("the policy must not be set without the policy API"),
+        raising=False,
+    )
+    monkeypatch.setattr(playwright_event_loop.sys, "platform", "win32")
+    with windows_playwright_event_loop():
+        pass
+
+
 def test_windows_event_loop_noop_off_win32(monkeypatch) -> None:
     """Off win32 the context manager is a pure no-op."""
-    monkeypatch.setattr(browser_capture.sys, "platform", "linux")
+    monkeypatch.setattr(playwright_event_loop.sys, "platform", "linux")
     with windows_playwright_event_loop():
         pass  # no exception, nothing swapped
 
