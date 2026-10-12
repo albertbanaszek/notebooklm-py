@@ -853,6 +853,8 @@ set NOTEBOOKLM_WINDOWS_EVENT_LOOP=selector
 
 Only do this if the default loop hangs. On Python 3.12–3.14 the selector loop can drop data from large file uploads ([#2485](https://github.com/teng-lin/notebooklm-py/issues/2485)): `source add` fails with `NETWORK_ERROR … (upload_finalize)` after a flood of `AssertionError: Data should not be empty`. Python 3.10, 3.11 and 3.15 are not affected.
 
+The variable accepts only `selector` or `proactor` (case-insensitive). Any other value makes every CLI command, even `status`, fail before it starts with `Unknown NOTEBOOKLM_WINDOWS_EVENT_LOOP=...` (`CONFIG_ERROR` with `--json`). If you set it persistently, for example in your user environment variables, fix or remove it there.
+
 Earlier releases forced the selector loop on every Windows machine (#79). If you added a workaround for #2485, such as a `.pth` hook that aliases `WindowsSelectorEventLoopPolicy` to the Proactor policy, you can remove it.
 
 For the Python API in such an environment, run your code on a selector loop, with the same upload caveat:
