@@ -69,7 +69,7 @@ class _ChatService:
         self.session_id = session_id
         self.list_requests: list[Any] = []
         self.generate_requests: list[Any] = []
-        self.stream_cancel_seen = asyncio.Event()
+        self.stream_closed = asyncio.Event()
 
     async def list_sessions(self, request: Any, context: Any) -> Any:
         del context
@@ -82,6 +82,10 @@ class _ChatService:
 
     async def generate(self, request: Any, context: Any):
         self.generate_requests.append(request)
+        # Fires however the RPC ends. A client cancel that reaches the handler
+        # task while grpc.aio is still awaiting the final frame's send never
+        # resumes this generator, so the stall below may not see it.
+        context.add_done_callback(lambda _context: self.stream_closed.set())
         yield chat_pb2.GenerateFreeFormStreamedResponse(
             answer=chat_pb2.AnswerResponse(response="Cumulative partial"),
             is_final_response=False,
@@ -95,11 +99,7 @@ class _ChatService:
             is_final_response=True,
         )
         if self.stall_after_final:
-            try:
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                self.stream_cancel_seen.set()
-                raise
+            await asyncio.Event().wait()
 
 
 def _handler(service: _ChatService) -> Any:
@@ -123,6 +123,8 @@ def _handler(service: _ChatService) -> Any:
 @asynccontextmanager
 async def _running_api(
     service: _ChatService,
+    *,
+    chat_timeout: float = 1.0,
 ) -> AsyncIterator[tuple[AndroidChatAPI, CallSupervisor, _Bearer]]:
     server = grpc.aio.server()
     server.add_generic_rpc_handlers((_handler(service),))
@@ -163,7 +165,7 @@ async def _running_api(
         session=session,
         loop_guard=supervisor,
         notebooks=_Notebooks(),
-        chat_timeout=1.0,
+        chat_timeout=chat_timeout,
         turn_id_factory=lambda: "00000000-0000-4000-8000-000000000123",
     )
 
@@ -213,9 +215,11 @@ async def test_base_ask_over_real_android_session_and_fake_grpc_server() -> None
 @pytest.mark.asyncio
 async def test_final_frame_completes_without_waiting_for_stream_eof() -> None:
     service = _ChatService(stall_after_final=True)
-    async with _running_api(service) as (api, supervisor, _bearer):
-        result = await asyncio.wait_for(api.ask("notebook-1", "Question?"), timeout=2.0)
-        await asyncio.wait_for(service.stream_cancel_seen.wait(), timeout=2.0)
+    # The stream's deadline outlasts both waits below, so only the client's
+    # cancel of the lingering wire stream can end the stalled RPC in time.
+    async with _running_api(service, chat_timeout=60.0) as (api, supervisor, _bearer):
+        result = await asyncio.wait_for(api.ask("notebook-1", "Question?"), timeout=10.0)
+        await asyncio.wait_for(service.stream_closed.wait(), timeout=10.0)
 
         assert result.answer == "Cumulative final"
         assert supervisor._current is not None
