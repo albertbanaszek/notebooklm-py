@@ -508,6 +508,7 @@ def _part(
     body: bytes | None = None,
     media_type: str = "audio/mp4",
     content_range: str | None = None,
+    last_modified: str | None = LAST_MODIFIED,
     extra_headers: dict[str, str] | None = None,
 ) -> FakeResponse:
     return FakeResponse(
@@ -517,6 +518,7 @@ def _part(
             "content-range": (
                 f"bytes {start}-{end}/{total}" if content_range is None else content_range
             ),
+            **({} if last_modified is None else {"last-modified": last_modified}),
             **(extra_headers or {}),
         },
         chunks=[MP4[start : end + 1] if body is None else body],
@@ -593,18 +595,13 @@ async def test_ranged_transfer_rejects_a_declared_total_over_the_limit_before_st
         pytest.param([_part(0, 11), _part(12, 23, media_type="video/mp4")], id="type-changes"),
         pytest.param([_part(0, 11), _part(12, 30)], id="part-past-total"),
         pytest.param(
-            [
-                _part(0, 11, extra_headers={"last-modified": LAST_MODIFIED}),
-                _part(12, 23, extra_headers={"last-modified": "Thu, 03 Sep 2026 00:00:00 GMT"}),
-            ],
+            [_part(0, 11), _part(12, 23, last_modified="Thu, 03 Sep 2026 00:00:00 GMT")],
             id="last-modified-changes",
         ),
+        pytest.param([_part(0, 11), _part(12, 23, last_modified=None)], id="last-modified-dropped"),
         pytest.param(
-            [
-                _part(0, 11, extra_headers={"last-modified": LAST_MODIFIED}),
-                _part(12, 23),
-            ],
-            id="last-modified-dropped",
+            [_part(0, 11, last_modified=None), _part(12, 23, last_modified=None)],
+            id="no-validator-across-parts",
         ),
         pytest.param(
             [
@@ -979,7 +976,8 @@ async def test_ranged_transfer_accepts_a_first_part_that_covers_the_whole_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
-    client = FakeClient([_progressive_redirect(), _part(0, 29)])
+    # A single part is one entity, so it needs no validator.
+    client = FakeClient([_progressive_redirect(), _part(0, 29, last_modified=None)])
     service, _, _ = await _open_service(client)
     destination = tmp_path / "audio.m4a"
 

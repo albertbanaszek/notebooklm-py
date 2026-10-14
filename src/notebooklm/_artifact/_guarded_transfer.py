@@ -210,7 +210,8 @@ async def _ranged_body(
     Every part must continue exactly where the previous one ended, describe the
     same total, media type and validators, and carry exactly its declared byte
     count. googlevideo ignores ``If-Range``, so a changed entity is detected by
-    comparing ``ETag`` and ``Last-Modified`` on every part instead.
+    comparing ``ETag`` and ``Last-Modified`` on every part instead; a first part
+    with neither cannot be continued.
     """
 
     start, end, size = first_range
@@ -232,7 +233,8 @@ async def _ranged_body(
                 raise _RangeMismatch
             if end == size - 1:
                 return
-            if parts_left == 0:
+            # Without a validator, parts cannot be shown to be one entity.
+            if parts_left == 0 or validators == (None, None):
                 raise _RangeMismatch
             parts_left -= 1
             if response_cm is not None:
