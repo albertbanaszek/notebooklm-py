@@ -82,9 +82,11 @@ class _ChatService:
 
     async def generate(self, request: Any, context: Any):
         self.generate_requests.append(request)
-        # Fires however the RPC ends. A client cancel that reaches the handler
-        # task while grpc.aio is still awaiting the final frame's send never
-        # resumes this generator, so the stall below may not see it.
+        # Proof of teardown that does not depend on where the client's cancel
+        # lands. grpc.aio cancels the handler task; if that happens while it
+        # awaits a yielded frame's send (or the send fails), the generator is
+        # never resumed, so a CancelledError caught in the stall is not
+        # guaranteed. ``context.cancelled()`` stays False for client cancels.
         context.add_done_callback(lambda _context: self.stream_closed.set())
         yield chat_pb2.GenerateFreeFormStreamedResponse(
             answer=chat_pb2.AnswerResponse(response="Cumulative partial"),
@@ -215,8 +217,8 @@ async def test_base_ask_over_real_android_session_and_fake_grpc_server() -> None
 @pytest.mark.asyncio
 async def test_final_frame_completes_without_waiting_for_stream_eof() -> None:
     service = _ChatService(stall_after_final=True)
-    # The stream's deadline outlasts both waits below, so only the client's
-    # cancel of the lingering wire stream can end the stalled RPC in time.
+    # The deadline outlasts the waits below, so only the client's cancel can
+    # end the stalled stream in time.
     async with _running_api(service, chat_timeout=60.0) as (api, supervisor, _bearer):
         result = await asyncio.wait_for(api.ask("notebook-1", "Question?"), timeout=10.0)
         await asyncio.wait_for(service.stream_closed.wait(), timeout=10.0)
