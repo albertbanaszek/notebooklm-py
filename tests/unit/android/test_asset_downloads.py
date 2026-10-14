@@ -654,6 +654,317 @@ async def test_ranged_transfer_cancellation_closes_the_open_part(
 
 
 @pytest.mark.asyncio
+async def test_ranged_transfer_retirement_between_parts_preserves_the_lifecycle_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    first = _part(0, 11)
+    client = FakeClient([_progressive_redirect(), first, _part(12, 23), _part(24, 29)])
+    service, _, _ = await _open_service(client)
+
+    async def retire_after_first_part():
+        yield MP4[:12]
+        service._active_epoch = 2
+
+    first.aiter_bytes = retire_after_first_part  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="retired resource generation"):
+        await service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+
+    assert len(client.requests) == 2, "no part is requested after retirement"
+    assert [context.exits for context in client.contexts] == [1, 1]
+    assert list(tmp_path.glob(".*.part")) == []
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_cancelled_while_closing_parts_still_closes_the_first(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    real_cleanup = guarded_module._await_advisory_cleanup
+
+    async def cancelled_after_parts_close(cleanup: Any, *, pending_error: Any) -> None:
+        await real_cleanup(cleanup, pending_error=pending_error)
+        if type(cleanup).__name__ == "async_generator_athrow":
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(guarded_module, "_await_advisory_cleanup", cancelled_after_parts_close)
+    client = FakeClient([_progressive_redirect(), _part(0, 29)])
+    service, _, _ = await _open_service(client)
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+
+    assert [context.exits for context in client.contexts] == [1, 1]
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_write_failure_closes_every_part(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    client = FakeClient([_progressive_redirect(), _part(0, 11), _part(12, 23), _part(24, 29)])
+    service, _, _ = await _open_service(client)
+    real_fdopen = guarded_module.os.fdopen
+
+    class FailingSecondWrite:
+        def __init__(self, handle: Any) -> None:
+            self.handle = handle
+            self.writes = 0
+
+        def __enter__(self) -> FailingSecondWrite:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            self.handle.close()
+
+        def write(self, data: bytes) -> int:
+            self.writes += 1
+            if self.writes == 2:
+                raise OSError("disk full")
+            return self.handle.write(data)
+
+    monkeypatch.setattr(
+        guarded_module.os, "fdopen", lambda fd, mode: FailingSecondWrite(real_fdopen(fd, mode))
+    )
+
+    with pytest.raises(ArtifactDownloadError, match="code=transport"):
+        await service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+
+    assert [context.exits for context in client.contexts] == [1, 1, 1]
+    assert list(tmp_path.glob(".*.part")) == []
+
+
+class _GatedExitContext(FakeResponseContext):
+    def __init__(self, outcome: FakeResponse, started: asyncio.Event) -> None:
+        super().__init__(outcome)
+        self.started = started
+        self.release = asyncio.Event()
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        self.exits += 1
+        self.started.set()
+        await self.release.wait()
+
+
+class _GatedEnterContext(FakeResponseContext):
+    def __init__(self, outcome: FakeResponse, started: asyncio.Event) -> None:
+        super().__init__(outcome)
+        self.started = started
+
+    async def __aenter__(self) -> FakeResponse:
+        self.started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")  # pragma: no cover
+
+
+class _GatedPartClient(FakeClient):
+    """Gate the request for one range, either while entering or while exiting it."""
+
+    def __init__(self, outcomes: list[FakeResponse], *, gated_range: str, gate: str) -> None:
+        super().__init__(outcomes)
+        self.gated_range = gated_range
+        self.gate = gate
+        self.started = asyncio.Event()
+        self.gated: FakeResponseContext | None = None
+
+    def stream(
+        self, method: str, url: str, *, headers: dict[str, str], follow_redirects: bool
+    ) -> FakeResponseContext:
+        context = super().stream(method, url, headers=headers, follow_redirects=follow_redirects)
+        if headers.get("Range") != self.gated_range:
+            return context
+        outcome = context.outcome
+        assert isinstance(outcome, FakeResponse)
+        gated: FakeResponseContext = (
+            _GatedExitContext(outcome, self.started)
+            if self.gate == "exit"
+            else _GatedEnterContext(outcome, self.started)
+        )
+        self.contexts[-1] = self.gated = gated
+        return gated
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gate", ["exit", "enter"])
+async def test_ranged_transfer_cancelled_between_parts_closes_every_part(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    gate: str,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    client = _GatedPartClient(
+        [_progressive_redirect(), _part(0, 11), _part(12, 23), _part(24, 29)],
+        gated_range="bytes=12-23",
+        gate=gate,
+    )
+    service, _, _ = await _open_service(client)
+    transfer = asyncio.create_task(
+        service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+    )
+    await client.started.wait()
+    transfer.cancel()
+    await asyncio.sleep(0)
+    if isinstance(client.gated, _GatedExitContext):
+        client.gated.release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await transfer
+
+    assert [context.exits for context in client.contexts] == [1, 1, 1]
+    assert len(client.requests) == 3, "no part is requested after cancellation"
+    assert list(tmp_path.glob(".*.part")) == []
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_never_carries_response_cookies_between_parts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    client = CookieAwareClient(
+        [_progressive_redirect(), _part(0, 11), _part(12, 23), _part(24, 29)]
+    )
+    service, _, _ = await _open_service(client)
+
+    await service.download_representation(
+        INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+    )
+
+    assert all("Cookie" not in request[2] for request in client.requests)
+    assert client.cookies.value is None
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_resumes_from_where_a_shortened_part_ends(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    client = FakeClient(
+        [_progressive_redirect(), _part(0, 11), _part(12, 12), _part(13, 24), _part(25, 29)]
+    )
+    service, _, _ = await _open_service(client)
+    destination = tmp_path / "audio.m4a"
+
+    await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert destination.read_bytes() == MP4
+    assert [request[2]["Range"] for request in client.requests[1:]] == [
+        "bytes=0-11",
+        "bytes=12-23",
+        "bytes=13-24",
+        "bytes=25-29",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_accepts_a_first_part_that_covers_the_whole_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    client = FakeClient([_progressive_redirect(), _part(0, 29)])
+    service, _, _ = await _open_service(client)
+    destination = tmp_path / "audio.m4a"
+
+    await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert destination.read_bytes() == MP4
+    assert len(client.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_failure_is_secret_free(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    gap = _part(13, 23)
+    client = FakeClient([_progressive_redirect(), _part(0, 11), gap])
+    service, _, _ = await _open_service(client)
+
+    with pytest.raises(ArtifactDownloadError) as raised:
+        await service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+
+    assert "code=range" in str(raised.value)
+    _assert_library_traceback_is_secret_free(
+        raised.value,
+        secrets=["progressive-secret", "initial-secret", BEARER],
+        raw_objects=[gap, client],
+    )
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("bytes 0-9/10", (0, 9, 10)),
+        ("BYTES 0-9/10", (0, 9, 10)),
+        ("  bytes 0-9/10  ", (0, 9, 10)),
+        ("bytes  0-9/10", None),
+        ("bytes 0-9/*", None),
+        ("bytes */10", None),
+        ("bytes -1-9/10", None),
+        ("bytes 0-10/10", None),
+        ("bytes 5-4/10", None),
+        ("bytes 0-9/0", None),
+        ("bytes 0-9/10, bytes 10-19/20", None),
+        ("items 0-9/10", None),
+        pytest.param("bytes 0-9/" + "9" * 5000, None, id="beyond-int-digit-limit"),
+    ],
+)
+def test_content_range_parsing_fails_closed(
+    raw: str, expected: tuple[int, int, int] | None
+) -> None:
+    parsed = guarded_module._content_range(httpx.Headers({"content-range": raw}))
+    assert (None if parsed is None else tuple(parsed)) == expected
+
+
+@pytest.mark.asyncio
+async def test_ranged_continuation_401_is_an_auth_error_for_that_hop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    url = "https://media.example.com/audio"
+    client = FakeClient([_part(0, 11), FakeResponse(401, headers={"content-type": "text/html"})])
+
+    async def credential_for(_url: str) -> Any:
+        return guarded_module.HopCredentials(headers={"Authorization": "Bearer hop-secret"})
+
+    with pytest.raises(AuthError, match="media.example.com"):
+        await guarded_module.guarded_transfer(
+            client,
+            url,
+            str(tmp_path / "audio.m4a"),
+            policy=assets_module._REPRESENTATION_POLICIES["audio"],
+            credential_for=credential_for,
+            validate_url=lambda _url: "media.example.com",
+            safe_host=lambda _url: "media.example.com",
+            assert_active=lambda: None,
+            ranged_hosts=lambda _host: True,
+        )
+
+    assert [request[1] for request in client.requests] == [url, url]
+    assert all(request[2]["Authorization"] == "Bearer hop-secret" for request in client.requests)
+    assert [context.exits for context in client.contexts] == [1, 1]
+    assert list(tmp_path.glob(".*.part")) == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "redirect_url",
     [

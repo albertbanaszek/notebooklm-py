@@ -149,6 +149,14 @@ class _RangeMismatch(Exception):
     """A ranged response broke the contiguous single-entity contract."""
 
 
+class _LifecycleFenced(Exception):
+    """Carry a lifecycle fence raised between parts past the transport catch-all."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+
 class _ContentRange(NamedTuple):
     start: int
     end: int
@@ -166,7 +174,10 @@ def _content_range(headers: Any) -> _ContentRange | None:
         part.isascii() and part.isdigit() for part in (first, last, total)
     ):
         return None
-    start, end, size = int(first), int(last), int(total)
+    try:
+        start, end, size = int(first), int(last), int(total)
+    except ValueError:  # beyond the interpreter's integer-string digit limit
+        return None
     if start > end or end >= size:
         return None
     return _ContentRange(start, end, size)
@@ -179,6 +190,7 @@ async def _ranged_body(
     first: Any,
     first_range: _ContentRange,
     media_type: str,
+    approved_host: str,
     assert_active: Callable[[], None],
 ) -> AsyncGenerator[bytes, None]:
     """Yield one entity from contiguous range responses, starting with ``first``.
@@ -205,7 +217,10 @@ async def _ranged_body(
             if response_cm is not None:
                 cm, response_cm = response_cm, None
                 await _await_advisory_cleanup(cm.__aexit__(None, None, None), pending_error=None)
-            assert_active()
+            try:
+                assert_active()
+            except Exception as error:
+                raise _LifecycleFenced(error) from None
             next_start = end + 1
             next_end = min(next_start + RANGED_TRANSFER_CHUNK_BYTES, size) - 1
             _clear_client_cookies(client)
@@ -216,7 +231,10 @@ async def _ranged_body(
                 follow_redirects=False,
             )
             response = await response_cm.__aenter__()
-            part = _content_range(response.headers) if int(response.status_code) == 206 else None
+            status = int(response.status_code)
+            if status in {401, 403}:
+                raise _auth_error(status, approved_host)
+            part = _content_range(response.headers) if status == 206 else None
             part_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             if (
                 part is None
@@ -417,6 +435,7 @@ async def guarded_transfer(
                         response,
                         first_range,
                         media_type,
+                        host,
                         assert_active,
                     )
                 with os.fdopen(fd, "wb") as handle:
@@ -460,6 +479,9 @@ async def guarded_transfer(
                 raise
             except _RangeMismatch:
                 return TransferFailure("range", host, hop)
+            except _LifecycleFenced as fenced:
+                # Like the pre-publish fence: raise after the hop is closed.
+                lifecycle_failure = fenced.error
             except BaseException:
                 return TransferFailure("transport", host, hop)
             finally:
@@ -471,14 +493,16 @@ async def guarded_transfer(
                             ranged_parts.aclose(),
                             pending_error=pending_error,
                         )
-                    if response_cm is not None:
-                        await _await_advisory_cleanup(
-                            response_cm.__aexit__(None, None, None),
-                            pending_error=pending_error,
-                        )
                 finally:
-                    _clear_client_cookies(client)
-                    del credentials, pending_error, ranged_parts, response, response_cm
+                    try:
+                        if response_cm is not None:
+                            await _await_advisory_cleanup(
+                                response_cm.__aexit__(None, None, None),
+                                pending_error=pending_error,
+                            )
+                    finally:
+                        _clear_client_cookies(client)
+                        del credentials, pending_error, ranged_parts, response, response_cm
             if lifecycle_failure is not None:
                 raise lifecycle_failure
         return TransferFailure("too_many_hops", safe_host(current_url or ""), max_redirects)
