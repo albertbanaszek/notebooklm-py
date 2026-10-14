@@ -592,10 +592,11 @@ async def test_stream_aclose_cancels_wire_call_and_releases_call_scope() -> None
 
     service = _Service(on_stream=hold_after_one)
     # One RPC slot: the follow-up unary is admitted only if the stream's
-    # supervisor lease really was released by ``aclose()``. The deadline
-    # outlasts the waits below, so only the client's cancel can end the stalled
-    # stream in time.
-    async with _running_session(service, timeout=60.0, max_concurrent_rpcs=1) as harness:
+    # supervisor lease really was released by ``aclose()``. The 20-second
+    # deadline outlasts the 10-second waits below, so only the client's cancel
+    # can end the stalled stream in time, yet stays well under pytest's
+    # 60-second timeout so the aclose() bound below can report its failure.
+    async with _running_session(service, timeout=20.0, max_concurrent_rpcs=1) as harness:
         iterator = _generate(harness)
         first = await iterator.__anext__()
         assert first.answer.response == "one"
