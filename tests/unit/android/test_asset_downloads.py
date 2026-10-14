@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 import notebooklm._android.assets as assets_module
+import notebooklm._artifact._guarded_transfer as guarded_module
 from notebooklm._android.assets import AndroidAssetDownloadService
 from notebooklm._android.auth import BearerCredential
 from notebooklm._client_metrics import ClientMetrics
@@ -482,7 +483,174 @@ async def test_progressive_googlevideo_application_redirect_is_allowed_without_b
     assert bearer.calls == [1]
     assert [request[1] for request in client.requests] == [f"{INITIAL}&alr=yes", progressive]
     assert client.requests[0][2] == {"Authorization": f"Bearer {BEARER}"}
-    assert client.requests[1][2] == {}
+    # A server that ignores the range and answers 200 still streams the full body.
+    assert client.requests[1][2] == {"Range": "bytes=0-8388607"}
+
+
+PROGRESSIVE = "https://rr5---sn-ab5sznzy.googlevideo.com/media?cap=progressive-secret"
+
+
+def _progressive_redirect() -> FakeResponse:
+    return FakeResponse(
+        200,
+        headers={"content-type": "text/plain"},
+        chunks=[PROGRESSIVE.encode()],
+    )
+
+
+def _part(
+    start: int,
+    end: int,
+    *,
+    total: int = len(MP4),
+    body: bytes | None = None,
+    media_type: str = "audio/mp4",
+    content_range: str | None = None,
+) -> FakeResponse:
+    return FakeResponse(
+        206,
+        headers={
+            "content-type": media_type,
+            "content-range": (
+                f"bytes {start}-{end}/{total}" if content_range is None else content_range
+            ),
+        },
+        chunks=[MP4[start : end + 1] if body is None else body],
+    )
+
+
+@pytest.mark.asyncio
+async def test_googlevideo_media_downloads_in_bounded_ranges(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # googlevideo throttles a whole-file GET (or any range over ~10 MiB) to
+    # about playback speed; bounded ranges arrive at full speed.
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    client = FakeClient([_progressive_redirect(), _part(0, 11), _part(12, 23), _part(24, 29)])
+    service, _, _ = await _open_service(client)
+    destination = tmp_path / "audio.m4a"
+
+    await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert destination.read_bytes() == MP4
+    assert [request[1] for request in client.requests[1:]] == [PROGRESSIVE] * 3
+    assert [request[2] for request in client.requests[1:]] == [
+        {"Range": "bytes=0-11"},
+        {"Range": "bytes=12-23"},
+        {"Range": "bytes=24-29"},
+    ]
+    assert all(request[3] is False for request in client.requests)
+    assert [context.exits for context in client.contexts] == [1, 1, 1, 1]
+    assert list(tmp_path.glob(".*.part")) == []
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_rejects_a_declared_total_over_the_limit_before_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = assets_module._REPRESENTATION_POLICIES["audio"]
+    monkeypatch.setitem(
+        assets_module._REPRESENTATION_POLICIES,
+        "audio",
+        assets_module._RepresentationPolicy(
+            artifact_type=policy.artifact_type,
+            formats=policy.formats,
+            max_bytes=len(MP4) - 1,
+        ),
+    )
+    first = _part(0, 11)
+    client = FakeClient([_progressive_redirect(), first])
+    service, _, _ = await _open_service(client)
+
+    with pytest.raises(ArtifactDownloadError, match="code=size"):
+        await service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+
+    assert first.iterations == 0
+    assert list(tmp_path.glob(".*.part")) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "parts",
+    [
+        pytest.param([_part(1, 11)], id="first-part-not-at-zero"),
+        pytest.param([_part(0, 11, content_range="bytes */30")], id="first-part-unknown-total"),
+        pytest.param([_part(0, 11, content_range="bytes 0-11")], id="first-part-no-total"),
+        pytest.param([_part(0, 11, content_range="")], id="first-part-no-range"),
+        pytest.param([_part(0, 11, body=MP4[:8])], id="short-first-part"),
+        pytest.param([_part(0, 11, body=MP4[:13])], id="long-first-part"),
+        pytest.param([_part(0, 11), _part(13, 23)], id="gap"),
+        pytest.param([_part(0, 11), _part(12, 23, total=31)], id="total-changes"),
+        pytest.param([_part(0, 11), _part(12, 23, body=MP4[12:20])], id="short-part"),
+        pytest.param([_part(0, 11), _part(12, 23, media_type="video/mp4")], id="type-changes"),
+        pytest.param([_part(0, 11), _part(12, 30)], id="part-past-total"),
+        pytest.param(
+            [_part(0, 11), FakeResponse(200, headers={"content-type": "audio/mp4"}, chunks=[MP4])],
+            id="continuation-not-partial",
+        ),
+        pytest.param(
+            [
+                FakeResponse(
+                    206,
+                    headers={"content-type": "text/plain", "content-range": "bytes 0-11/30"},
+                    chunks=[PROGRESSIVE.encode()[:12]],
+                )
+            ],
+            id="partial-application-redirect",
+        ),
+    ],
+)
+async def test_ranged_transfer_rejects_inconsistent_parts_without_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    parts: list[FakeResponse],
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    destination = tmp_path / "audio.m4a"
+    destination.write_bytes(b"existing")
+    client = FakeClient([_progressive_redirect(), *parts])
+    service, _, _ = await _open_service(client)
+
+    with pytest.raises(ArtifactDownloadError) as raised:
+        await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert "code=range" in str(raised.value)
+    assert "progressive-secret" not in str(raised.value)
+    assert destination.read_bytes() == b"existing"
+    assert list(tmp_path.glob(".*.part")) == []
+    assert all(context.exits == 1 for context in client.contexts)
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_cancellation_closes_the_open_part(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    gate = asyncio.Event()
+    stalled = _part(12, 23)
+    stalled.gate = gate
+    client = FakeClient([_progressive_redirect(), _part(0, 11), stalled])
+    service, _, _ = await _open_service(client)
+
+    transfer = asyncio.create_task(
+        service.download_representation(
+            INITIAL, str(tmp_path / "audio.m4a"), representation="audio"
+        )
+    )
+    while stalled.iterations == 0:
+        await asyncio.sleep(0)
+    transfer.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await transfer
+
+    assert [context.exits for context in client.contexts] == [1, 1, 1]
+    assert list(tmp_path.glob(".*.part")) == []
+    assert not (tmp_path / "audio.m4a").exists()
 
 
 @pytest.mark.asyncio
@@ -1809,5 +1977,6 @@ async def test_a_capability_host_outside_the_bearer_set_is_never_sent_a_bearer(
     assert await service.download_url(url, str(destination)) == str(destination)
 
     assert bearer.calls == [], "no credential is even minted for a non-bearer host"
-    assert client.requests[0][2] == {}
+    # googlevideo is fetched in ranges; the range is the only header it receives.
+    assert client.requests[0][2] == {"Range": "bytes=0-8388607"}
     assert client.requests[0][1] == f"{url}&alr=yes"
