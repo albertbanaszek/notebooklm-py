@@ -488,6 +488,8 @@ async def test_progressive_googlevideo_application_redirect_is_allowed_without_b
 
 
 PROGRESSIVE = "https://rr5---sn-ab5sznzy.googlevideo.com/media?cap=progressive-secret"
+# googlevideo sends Last-Modified but no ETag, and ignores If-Range.
+LAST_MODIFIED = "Wed, 02 Sep 2026 21:34:32 GMT"
 
 
 def _progressive_redirect() -> FakeResponse:
@@ -506,6 +508,7 @@ def _part(
     body: bytes | None = None,
     media_type: str = "audio/mp4",
     content_range: str | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> FakeResponse:
     return FakeResponse(
         206,
@@ -514,6 +517,7 @@ def _part(
             "content-range": (
                 f"bytes {start}-{end}/{total}" if content_range is None else content_range
             ),
+            **(extra_headers or {}),
         },
         chunks=[MP4[start : end + 1] if body is None else body],
     )
@@ -588,6 +592,27 @@ async def test_ranged_transfer_rejects_a_declared_total_over_the_limit_before_st
         pytest.param([_part(0, 11), _part(12, 23, body=MP4[12:20])], id="short-part"),
         pytest.param([_part(0, 11), _part(12, 23, media_type="video/mp4")], id="type-changes"),
         pytest.param([_part(0, 11), _part(12, 30)], id="part-past-total"),
+        pytest.param(
+            [
+                _part(0, 11, extra_headers={"last-modified": LAST_MODIFIED}),
+                _part(12, 23, extra_headers={"last-modified": "Thu, 03 Sep 2026 00:00:00 GMT"}),
+            ],
+            id="last-modified-changes",
+        ),
+        pytest.param(
+            [
+                _part(0, 11, extra_headers={"last-modified": LAST_MODIFIED}),
+                _part(12, 23),
+            ],
+            id="last-modified-dropped",
+        ),
+        pytest.param(
+            [
+                _part(0, 11, extra_headers={"etag": '"v1"'}),
+                _part(12, 23, extra_headers={"etag": '"v2"'}),
+            ],
+            id="etag-changes",
+        ),
         pytest.param(
             [_part(0, 11), FakeResponse(200, headers={"content-type": "audio/mp4"}, chunks=[MP4])],
             id="continuation-not-partial",
@@ -900,6 +925,52 @@ async def test_ranged_transfer_resumes_from_where_a_shortened_part_ends(
         "bytes=13-24",
         "bytes=25-29",
     ]
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_caps_the_number_of_parts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Valid one-byte parts must not turn one download into one request per byte:
+    # at most twice the parts a full-range download needs (here 2 * 3).
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    destination = tmp_path / "audio.m4a"
+    destination.write_bytes(b"existing")
+    client = FakeClient(
+        [_progressive_redirect(), _part(0, 11), *(_part(i, i) for i in range(12, 30))]
+    )
+    service, _, _ = await _open_service(client)
+
+    with pytest.raises(ArtifactDownloadError, match="code=range"):
+        await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert len(client.requests) == 1 + 6
+    assert destination.read_bytes() == b"existing"
+    assert list(tmp_path.glob(".*.part")) == []
+    assert all(context.exits == 1 for context in client.contexts)
+
+
+@pytest.mark.asyncio
+async def test_ranged_transfer_accepts_parts_with_the_same_validators(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    validators = {"last-modified": LAST_MODIFIED, "etag": '"v1"'}
+    client = FakeClient(
+        [
+            _progressive_redirect(),
+            *(_part(start, min(start + 11, 29), extra_headers=validators) for start in (0, 12, 24)),
+        ]
+    )
+    service, _, _ = await _open_service(client)
+    destination = tmp_path / "audio.m4a"
+
+    await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert destination.read_bytes() == MP4
+    assert all("If-Range" not in request[2] for request in client.requests)
 
 
 @pytest.mark.asyncio

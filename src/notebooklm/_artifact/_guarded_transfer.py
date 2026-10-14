@@ -191,6 +191,10 @@ def _content_range(headers: Any) -> _ContentRange | None:
     return _ContentRange(start, end, size)
 
 
+def _validators(headers: Any) -> tuple[str | None, str | None]:
+    return headers.get("etag"), headers.get("last-modified")
+
+
 async def _ranged_body(
     client: Any,
     url: str,
@@ -204,10 +208,16 @@ async def _ranged_body(
     """Yield one entity from contiguous range responses, starting with ``first``.
 
     Every part must continue exactly where the previous one ended, describe the
-    same total and media type, and carry exactly its declared byte count.
+    same total, media type and validators, and carry exactly its declared byte
+    count. googlevideo ignores ``If-Range``, so a changed entity is detected by
+    comparing ``ETag`` and ``Last-Modified`` on every part instead.
     """
 
     start, end, size = first_range
+    validators = _validators(first.headers)
+    # Shortened parts are accepted, but must not turn one download into an
+    # unbounded number of requests.
+    parts_left = 2 * -(-size // RANGED_TRANSFER_CHUNK_BYTES) - 1
     response = first
     response_cm: Any | None = None
     try:
@@ -222,6 +232,9 @@ async def _ranged_body(
                 raise _RangeMismatch
             if end == size - 1:
                 return
+            if parts_left == 0:
+                raise _RangeMismatch
+            parts_left -= 1
             if response_cm is not None:
                 cm, response_cm = response_cm, None
                 await _await_advisory_cleanup(cm.__aexit__(None, None, None), pending_error=None)
@@ -252,6 +265,7 @@ async def _ranged_body(
                 or part.end > next_end
                 or part.total != size
                 or part_type != media_type
+                or _validators(response.headers) != validators
             ):
                 raise _RangeMismatch
             start, end, _ = part
