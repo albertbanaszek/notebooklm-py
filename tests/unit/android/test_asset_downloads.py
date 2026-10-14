@@ -626,6 +626,39 @@ async def test_ranged_transfer_rejects_inconsistent_parts_without_publication(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [302, 429, 503])
+async def test_ranged_continuation_error_status_keeps_its_http_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+) -> None:
+    # Like the first request, a later part answered with neither 200 nor 206
+    # reports its status, so callers can tell a server error from a bad range.
+    monkeypatch.setattr(guarded_module, "RANGED_TRANSFER_CHUNK_BYTES", 12)
+    destination = tmp_path / "audio.m4a"
+    destination.write_bytes(b"existing")
+    client = FakeClient(
+        [
+            _progressive_redirect(),
+            _part(0, 11),
+            FakeResponse(status, headers={"content-type": "text/html", "location": SIGNED}),
+        ]
+    )
+    service, _, _ = await _open_service(client)
+
+    with pytest.raises(ArtifactDownloadError) as raised:
+        await service.download_representation(INITIAL, str(destination), representation="audio")
+
+    assert f"code=http_{status}" in str(raised.value)
+    assert raised.value.status_code == status
+    assert "progressive-secret" not in str(raised.value)
+    assert len(client.requests) == 3
+    assert destination.read_bytes() == b"existing"
+    assert list(tmp_path.glob(".*.part")) == []
+    assert all(context.exits == 1 for context in client.contexts)
+
+
+@pytest.mark.asyncio
 async def test_ranged_transfer_cancellation_closes_the_open_part(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

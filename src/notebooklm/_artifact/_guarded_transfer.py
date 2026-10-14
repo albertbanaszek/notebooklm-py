@@ -149,6 +149,14 @@ class _RangeMismatch(Exception):
     """A ranged response broke the contiguous single-entity contract."""
 
 
+class _PartStatus(Exception):
+    """A later part was answered with neither 200 nor 206."""
+
+    def __init__(self, status: int) -> None:
+        super().__init__()
+        self.status = status
+
+
 class _LifecycleFenced(Exception):
     """Carry a lifecycle fence raised between parts past the transport catch-all."""
 
@@ -234,6 +242,8 @@ async def _ranged_body(
             status = int(response.status_code)
             if status in {401, 403}:
                 raise _auth_error(status, approved_host)
+            if status not in {200, 206}:
+                raise _PartStatus(status)
             part = _content_range(response.headers) if status == 206 else None
             part_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             if (
@@ -479,6 +489,8 @@ async def guarded_transfer(
                 raise
             except _RangeMismatch:
                 return TransferFailure("range", host, hop)
+            except _PartStatus as part_status:
+                return TransferFailure(f"http_{part_status.status}", host, hop)
             except _LifecycleFenced as fenced:
                 # Like the pre-publish fence: raise after the hop is closed.
                 lifecycle_failure = fenced.error
