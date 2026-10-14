@@ -612,6 +612,13 @@ async def test_ranged_transfer_rejects_a_declared_total_over_the_limit_before_st
         ),
         pytest.param(
             [
+                _part(0, 11, last_modified=None, extra_headers={"etag": 'W/"v1"'}),
+                _part(12, 23, last_modified=None, extra_headers={"etag": 'W/"v1"'}),
+            ],
+            id="weak-etag-only-across-parts",
+        ),
+        pytest.param(
+            [
                 _part(0, 11, extra_headers={"etag": '"v1"'}),
                 _part(12, 23, extra_headers={"etag": '"v2"'}),
             ],

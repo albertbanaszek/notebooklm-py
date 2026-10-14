@@ -192,9 +192,15 @@ def _content_range(headers: Any) -> _ContentRange | None:
 
 
 def _validators(headers: Any) -> tuple[str | None, str | None]:
-    """Return ``(ETag, Last-Modified)``, with a blank value treated as absent."""
+    """Return ``(ETag, Last-Modified)``, treating blank values and weak ETags as absent.
+
+    A weak ETag promises only semantic equivalence, not identical bytes, so it
+    cannot vouch for stitching byte ranges together (RFC 9110 section 8.8.1).
+    """
 
     etag = (headers.get("etag") or "").strip() or None
+    if etag is not None and etag.startswith("W/"):
+        etag = None
     last_modified = (headers.get("last-modified") or "").strip() or None
     return etag, last_modified
 
