@@ -1,5 +1,6 @@
 """Report polling tolerates replacement races without hiding broken evidence."""
 
+import asyncio
 import errno
 import json
 from pathlib import Path
@@ -27,7 +28,7 @@ async def test_report_observation_keeps_deadline_when_access_stays_denied(tmp_pa
     read = Mock(side_effect=PermissionError(13, "Access denied"))
     monkeypatch.setattr(Path, "read_text", read)
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         await _observe(tmp_path / "report.json", lambda state: True, timeout=0.05)
     assert read.call_count >= 1
 
