@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -57,6 +58,14 @@ def _inspect_wheel(wheel: Path) -> None:
         metadata = BytesParser().parsebytes(archive.read(metadata_names[0]))
 
     requirements = metadata.get_all("Requires-Dist", [])
+    # Older Python versions and optional extras can supply this transitively,
+    # hiding a missing direct dependency even in a clean-install smoke test.
+    if not any(
+        re.match(r"typing[-_]extensions\b", requirement, re.IGNORECASE) and ";" not in requirement
+        for requirement in requirements
+    ):
+        raise RuntimeError("wheel metadata has no unconditional typing_extensions requirement")
+
     playwright_requirements = [
         requirement
         for requirement in requirements
