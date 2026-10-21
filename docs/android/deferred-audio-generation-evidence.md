@@ -84,3 +84,28 @@ NOTEBOOKLM_PROFILE=YOUR_TEST_PROFILE NOTEBOOKLM_DEFERRED_AUDIO_CONFORMANCE=1 \
   uv run pytest -o addopts='' \
   tests/e2e/test_deferred_audio.py -v
 ```
+
+## Server-selected execution time
+
+Two retained overviews created at approximately 19:49:33 UTC on 2026-10-21
+received these timestamps in `Artifact.scheduledExecutionTime #34`:
+
+| Creation backend | Scheduled execution (UTC) | Independent observation |
+| --- | --- | --- |
+| Android | 19:53:50 | `scheduled -> in_progress` observed at 19:54:05 |
+| Web | 20:11:55 | Retained for automatic execution monitoring |
+
+The Android job started without a retry, `GenerateArtifact`, or
+`ExecuteDeferredGeneration` call. These observed delays were about 4 and
+22 minutes, respectively; the UI's "a few hours" text is not a fixed delay.
+The continued execution and cleanup record is attached to
+[PR #2506](https://github.com/teng-lin/notebooklm-py/pull/2506).
+
+A bounded attempt to move the retained Web artifact forward with
+`UpdateArtifact` and mask `scheduled_execution_time` returned
+`INVALID_ARGUMENT`; independent read-back kept the original timestamp.
+A separate creation probe set artifact field 34 to one minute ahead while
+still enabling deferred generation. The server returned `scheduled` but
+ignored that timestamp, choosing about five hours later instead. The extra
+probe artifact was deleted immediately. These observations support exposing
+`later` as a boolean, without promising an arbitrary caller-selected time.
