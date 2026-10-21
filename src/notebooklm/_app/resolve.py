@@ -116,8 +116,9 @@ def resolve_ref(
 
     1. Empty / whitespace ``token`` -> :class:`ValidationError`.
     2. Canonical 36-char 8-4-4-4-12 UUID -> returned lowercased without scanning
-       ``items`` (the full-id fast-path; see :data:`FULL_ID_PATTERN`). The caller is responsible for any
-       authoritative-membership check it needs; this core trusts a full id.
+       ``items`` (the full-id fast-path; see :data:`FULL_ID_PATTERN`). The caller
+       is responsible for any authoritative-membership check it needs; this core
+       trusts a full id.
     3. Case-insensitive exact match against an item id -> that item (exact wins
        over prefix so a short-but-complete id is not reported ambiguous when it
        is also a prefix of another item).
