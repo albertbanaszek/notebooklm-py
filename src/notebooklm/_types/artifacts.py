@@ -331,6 +331,11 @@ class Artifact:
         return self.status == ArtifactStatus.PENDING
 
     @property
+    def is_scheduled(self) -> bool:
+        """Check if generation is deferred until a server-selected time."""
+        return self.status == ArtifactStatus.SCHEDULED
+
+    @property
     def is_failed(self) -> bool:
         """Check if artifact generation failed (status=FAILED)."""
         return self.status == ArtifactStatus.FAILED
@@ -341,7 +346,7 @@ class Artifact:
 
         Returns:
             "pending", "in_progress", "completed", "failed", "suggested",
-            "pending_review", or "unknown". See :class:`ArtifactStatus` for the
+            "pending_review", "scheduled", or "unknown". See :class:`ArtifactStatus` for the
             code-to-string table.
         """
         return artifact_status_to_str(self.status)
@@ -521,6 +526,7 @@ class GenerationState(str, Enum):
     # greppable against the recovered enum dump. Semantics unconfirmed; see
     # :class:`~notebooklm.rpc.types.ArtifactStatus`.
     PENDING_REVIEW = "pending_review"
+    SCHEDULED = "scheduled"
     # Legacy client-synthesized outcome; retained for compatibility, no longer emitted.
     REMOVED = "removed"
 
@@ -657,6 +663,11 @@ class GenerationStatus:
     def is_in_progress(self) -> bool:
         """Check if generation is in progress."""
         return self.status == "in_progress"
+
+    @property
+    def is_scheduled(self) -> bool:
+        """Check if generation is deferred until a server-selected time."""
+        return self.status == "scheduled"
 
     @property
     def is_not_found(self) -> bool:
