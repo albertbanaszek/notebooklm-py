@@ -1878,6 +1878,11 @@ status = await with_rate_limit_retry(
 
 **Waiting for Completion:**
 
+Scheduled artifacts remain nonterminal. `wait_for_completion()` also waits
+while an artifact is `scheduled`, so its ordinary timeout may expire before
+the server starts a job queued with `later=True`. Prefer checking
+`poll_status()` later, or choose a timeout that covers the deferred delay.
+
 ```python
 from notebooklm import ArtifactTimeoutError
 

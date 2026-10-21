@@ -538,7 +538,7 @@ class GenerationState(str, Enum):
         REST poll route consults it via :attr:`GenerationStatus.is_terminal`,
         and callers can use it instead of enumerating members themselves.
         Anything *not* terminal means "keep waiting": that is why the rare
-        states added in #2127 (``SUGGESTED``, ``PENDING_REVIEW``) and the
+        states ``SUGGESTED``, ``PENDING_REVIEW``, ``SCHEDULED`` and the
         long-standing ``UNKNOWN`` all answer ``False`` — none of them says
         generation finished, so treating them as terminal would abandon a task
         that is still running.
@@ -699,7 +699,7 @@ class GenerationStatus:
         The one predicate to branch on for "should I keep polling?". Everything
         else means keep waiting, including ``not_found`` (a transport-level
         absence, not an outcome) and the rare ``suggested`` / ``pending_review``
-        states added in #2127.
+        states, as well as deferred ``scheduled`` artifacts.
 
         Delegates to :attr:`GenerationState.is_terminal`, so a state added to
         that enum later is non-terminal here too — the safe default. Like its

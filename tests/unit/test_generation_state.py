@@ -451,6 +451,7 @@ async def test_poll_status_decoded_failed_artifact_has_no_fabricated_error():
         (ArtifactStatus.PROCESSING, GenerationState.IN_PROGRESS),
         (ArtifactStatus.SUGGESTED, GenerationState.SUGGESTED),
         (ArtifactStatus.PENDING_REVIEW, GenerationState.PENDING_REVIEW),
+        (ArtifactStatus.SCHEDULED, GenerationState.SCHEDULED),
     ],
 )
 async def test_poll_status_non_terminal_codes_keep_the_loop_waiting(
