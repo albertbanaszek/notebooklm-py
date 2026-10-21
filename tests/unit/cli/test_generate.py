@@ -2244,7 +2244,7 @@ class TestArtifactGenerationExitCodes:
 
 
 @pytest.mark.parametrize("json_output", [False, True])
-def test_generate_audio_later_reports_scheduled(runner, mock_auth, json_output):
+def test_generate_audio_later_reports_scheduled(runner, monkeypatch, json_output):
     from notebooklm.types import GenerationStatus
 
     client = create_mock_client()
@@ -2254,9 +2254,12 @@ def test_generate_audio_later_reports_scheduled(runner, mock_auth, json_output):
     args = ["generate", "audio", "-n", "nb_123", "--later"]
     if json_output:
         args.append("--json")
-    with patch.object(auth_module, "fetch_tokens_with_domains", new_callable=AsyncMock) as fetch:
-        fetch.return_value = ("csrf", "session")
-        result = runner.invoke(cli, args, obj=inject_client(client))
+    monkeypatch.setattr(
+        helpers_module,
+        "get_auth_tokens",
+        lambda _ctx: auth_module.AuthTokens(cookies={}, csrf_token="csrf", session_id="session"),
+    )
+    result = runner.invoke(cli, args, obj=inject_client(client))
     assert result.exit_code == 0, result.output
     assert client.artifacts.generate_audio.await_args.kwargs["later"] is True
     client.artifacts.wait_for_completion.assert_not_called()
@@ -2268,14 +2271,17 @@ def test_generate_audio_later_reports_scheduled(runner, mock_auth, json_output):
 
 
 @pytest.mark.parametrize("json_output", [False, True])
-def test_generate_audio_later_rejects_wait_before_generation(runner, mock_auth, json_output):
+def test_generate_audio_later_rejects_wait_before_generation(runner, monkeypatch, json_output):
     client = create_mock_client()
     args = ["generate", "audio", "-n", "nb_123", "--later", "--wait"]
     if json_output:
         args.append("--json")
-    with patch.object(auth_module, "fetch_tokens_with_domains", new_callable=AsyncMock) as fetch:
-        fetch.return_value = ("csrf", "session")
-        result = runner.invoke(cli, args, obj=inject_client(client))
+    monkeypatch.setattr(
+        helpers_module,
+        "get_auth_tokens",
+        lambda _ctx: auth_module.AuthTokens(cookies={}, csrf_token="csrf", session_id="session"),
+    )
+    result = runner.invoke(cli, args, obj=inject_client(client))
     assert result.exit_code != 0
     assert "--later cannot be combined with --wait" in result.output
     client.artifacts.generate_audio.assert_not_called()
