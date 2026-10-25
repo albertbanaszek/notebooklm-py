@@ -64,7 +64,9 @@ from ._client_options import (
 from ._collections import CollectionsAPI
 from ._deprecation import warn_deprecated, warn_registered_deprecation
 from ._env import get_base_url as get_base_url
+from ._interactive_audio import InteractiveAudioAPI
 from ._labels import LabelsAPI
+from ._live import LiveAPI
 from ._mind_maps_api import MindMapsAPI
 from ._notebooks import NotebooksAPI
 from ._notes import NotesAPI
@@ -161,6 +163,8 @@ class NotebookLMClient:
         notebooks: NotebooksAPI for notebook operations
         sources: SourcesAPI for source management
         artifacts: ArtifactsAPI for AI-generated content
+        interactive_audio: Web Interactive Audio Overview signaling and control frames
+        live: Android notebook-bound Live Voice sessions
         chat: ChatAPI for conversations
         research: ResearchAPI for web/drive research
         notes: NotesAPI for user notes
@@ -193,6 +197,8 @@ class NotebookLMClient:
     sources: SourcesAPI
     notebooks: NotebooksAPI
     artifacts: ArtifactsAPI
+    interactive_audio: InteractiveAudioAPI
+    live: LiveAPI
     chat: ChatAPI
     notes: NotesAPI
     mind_maps: MindMapsAPI

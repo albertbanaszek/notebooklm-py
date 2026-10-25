@@ -2097,6 +2097,8 @@ src/notebooklm/
 ├── __main__.py                  # `python -m notebooklm` entry point
 ├── client.py                    # NotebookLMClient
 ├── auth.py                      # Authentication facade — eager auth aliases + narrow lazy browser capabilities (see file table above)
+├── live.py                      # Public Android Live Voice events and errors
+├── interactive_audio.py         # Public ICE/SDP and Audio Overview event types
 ├── types.py                     # Dataclasses
 ├── artifacts.py                 # Public artifact-generation retry helpers
 ├── config.py                    # Public config facade over _env
@@ -2115,6 +2117,9 @@ src/notebooklm/
 ├── _backoff.py                  # Shared retry backoff calculation
 ├── _callbacks.py                # Sync/async callback invocation helper
 ├── _adapter_support.py          # Small transport-neutral adapter support leaf
+├── _live.py                     # Epoch-owned Android Live sessions, buffers and cleanup
+├── _interactive_audio.py        # Caller-owned WebRTC session signaling/control API
+├── _interactive_audio_wire.py   # Bounded AgentComms data-channel framing
 ├── _client_assembly.py          # Typed graph composition + sole client installer
 ├── _http_client_factory.py      # Captured private HTTPX/curl transfer constructors
 ├── _client_compat.py            # Pure 0.x Android-to-Web sidecar factory/proxy
@@ -2216,6 +2221,8 @@ src/notebooklm/
 │   │   └── usage.py             # Presence-preserving account/quota projection
 │   ├── errors.py                # Sanitized gRPC status/error mapping
 │   ├── notebooks.py             # Selected Android notebook reads/mutations, incl. native recent-removal
+│   ├── live_transport.py        # Dedicated Live bidi channel using shared bearer ownership
+│   ├── live_wire.py             # Private notebook Live protobuf codec
 │   ├── session.py               # Supervised lazy gRPC transport
 │   ├── epoch.py                 # Session-tagged task-local workflow epoch propagation
 │   ├── retry_policy.py          # Web-registry-derived Android replay-safety manifest
@@ -2313,6 +2320,7 @@ src/notebooklm/
 │               ├── sharing_pb2.py         # Exact messages + two-method sharing service
 │               └── sharing_pb2_grpc.py    # Exact two-method generated sharing stub
 ├── _web/                        # Private batchexecute web-backend implementation package
+│   ├── interactive_audio.py     # Web ICE/SDP RPC dispatch, with no replay
 │   ├── __init__.py              # Package boundary
 │   ├── assets.py                # Web asset lifecycle, live per-hop credentials, and generation fences
 │   ├── assembly.py              # Web-only branch-local runtime and namespace assembler
@@ -2397,6 +2405,7 @@ src/notebooklm/
 │   ├── validation.py            # Facade input-validation guards (generate_report coercion, export exactly-one-of) (#1874)
 │   └── polling.py               # Decoded backend-neutral artifact polling coordinator
 ├── _web/rows/                   # Positional-RPC-row adapters subpackage (#1328)
+│   ├── interactive_audio.py     # ICE/SDP JSON-in-string response decoding
 │   ├── __init__.py              # Re-exports the typed row views
 │   ├── artifacts.py             # Artifact + GET_SUGGESTED_REPORTS row adapters (ArtifactRow / ReportSuggestionRow)
 │   ├── chat.py                  # Streamed-chat row adapters (AnswerRow / CitationRow / CitationDetail / StreamFrameRow / ErrorPayloadRow) — closes the chat positional-decode perimeter (#1491); the document tree is delegated to documents.py (#2120)

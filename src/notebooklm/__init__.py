@@ -47,6 +47,10 @@ except PackageNotFoundError:
     )
 
 # Public API: Authentication
+# Public API: Android Live Voice
+# Public API: Interactive Audio Overviews
+from ._interactive_audio import InteractiveAudioSession
+from ._live import LiveSession
 from .auth import AuthTokens
 
 # Public API: Client
@@ -120,6 +124,25 @@ from .exceptions import (
     ValidationError,
     # Cross-domain umbrellas (wait/poll timeouts)
     WaitTimeoutError,
+)
+from .interactive_audio import (
+    AudioAgentError,
+    AudioControl,
+    AudioEvent,
+    AudioSessionDescription,
+    AudioTranscript,
+    IceServer,
+)
+from .live import (
+    LiveAudio,
+    LiveBufferOverflowError,
+    LiveEstablished,
+    LiveEvent,
+    LiveGoAway,
+    LiveInterrupted,
+    LiveSessionClosedError,
+    LiveTranscript,
+    LiveTurnComplete,
 )
 
 # Public API: Types and dataclasses
@@ -245,6 +268,25 @@ __all__ = [
     "__version__",
     # Client (main entry point)
     "NotebookLMClient",
+    # Android Live Voice
+    "LiveSession",
+    "LiveAudio",
+    "LiveBufferOverflowError",
+    "LiveEstablished",
+    "LiveEvent",
+    "LiveGoAway",
+    "LiveInterrupted",
+    "LiveSessionClosedError",
+    "LiveTranscript",
+    "LiveTurnComplete",
+    # Interactive Audio Overviews
+    "InteractiveAudioSession",
+    "AudioAgentError",
+    "AudioControl",
+    "AudioEvent",
+    "AudioSessionDescription",
+    "AudioTranscript",
+    "IceServer",
     # Auth
     "AuthTokens",
     # Observability

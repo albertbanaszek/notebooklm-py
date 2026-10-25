@@ -187,6 +187,8 @@ def test_collect_manifest_includes_representative_client_namespace_methods(scrip
     members = manifest["modules"]["notebooklm"]["exports"]["NotebookLMClient"]["members"]
 
     assert {
+        "live.connect",
+        "interactive_audio.connect",
         "artifacts.download_audio",
         "chat.ask",
         "collections.list",
@@ -205,8 +207,10 @@ def test_mind_maps_namespace_is_audited(script):
     assert "mind_maps" in script.CLIENT_NAMESPACE_ATTRIBUTES
 
 
-def test_all_eleven_client_namespaces_are_audited(script):
+def test_all_client_namespaces_are_audited(script):
     assert set(script.CLIENT_NAMESPACE_ATTRIBUTES) == {
+        "live",
+        "interactive_audio",
         "artifacts",
         "chat",
         "collections",

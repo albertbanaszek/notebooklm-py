@@ -153,6 +153,8 @@ def test_registry_has_no_unclassified_production_entries() -> None:
 def test_retry_disabled_entries_are_intentional_and_documented() -> None:
     """Non-retryable methods are pinned so cleanup cannot make them retryable."""
     expected = {
+        (RPCMethod.GET_ICE_CONFIG, None): IdempotencyPolicy.NON_IDEMPOTENT_NO_RETRY,
+        (RPCMethod.SEND_SDP_OFFER, None): IdempotencyPolicy.NON_IDEMPOTENT_NO_RETRY,
         (RPCMethod.CREATE_NOTEBOOK, None): IdempotencyPolicy.NON_IDEMPOTENT_NO_RETRY,
         (RPCMethod.COPY_NOTEBOOK, None): IdempotencyPolicy.NON_IDEMPOTENT_NO_RETRY,
         (RPCMethod.ADD_SOURCE, None): IdempotencyPolicy.NON_IDEMPOTENT_NO_RETRY,

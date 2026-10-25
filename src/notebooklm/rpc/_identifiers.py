@@ -87,6 +87,10 @@ class RPCMethod(str, Enum):
     GET_SOURCE_GUIDE = "tr032e"  # -> GenerateDocumentGuides
     GET_SUGGESTED_REPORTS = "ciyUvf"  # -> GenerateReportSuggestions. AI-suggested report formats
 
+    # Interactive Audio Overview signaling (artifact binding occurs on the data channel).
+    GET_ICE_CONFIG = "Of0kDd"  # -> GetIceConfig
+    SEND_SDP_OFFER = "eyWvXc"  # -> SendSdpOffer
+
     # Artifact operations
     # -> CreateArtifact. Generate any artifact (audio, video, report, quiz, etc.)
     CREATE_ARTIFACT = "R7cb6c"

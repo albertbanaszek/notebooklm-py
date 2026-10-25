@@ -295,6 +295,10 @@ FULL_MODE_ONLY_METHODS = {
 
 # Methods always skipped (even in full mode)
 ALWAYS_SKIP_METHODS = {
+    # Session-scoped allocation/signaling requires a live WebRTC peer and
+    # explicit cleanup, so neither belongs in a generic RPC health canary.
+    RPCMethod.GET_ICE_CONFIG,
+    RPCMethod.SEND_SDP_OFFER,
     # Takes too long
     RPCMethod.START_DEEP_RESEARCH,
 }

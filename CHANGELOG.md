@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Experimental real-time voice APIs (#2509).** Android clients can open
+  notebook-bound `client.live.connect(...)` sessions with audio input/output,
+  transcripts, interruption events and bounded lifecycle cleanup. Web clients
+  can negotiate an existing Audio Overview through
+  `client.interactive_audio.connect(...)`, with typed data-channel events and
+  caller-owned WebRTC. Recording, playback and codecs remain application-owned;
+  automatic reconnection is not enabled.
+
 ### Changed
 
 - **The Windows CLI runs on asyncio's default event loop (#2485).** The

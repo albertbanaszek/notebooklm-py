@@ -304,6 +304,13 @@ def register_default_policies(registry: IdempotencyRegistry) -> None:
     every remaining method, and the rest register *after* the seed (replacing
     the placeholders). See ADR-0005 for the taxonomy rationale.
     """
+    for method in (RPCMethod.GET_ICE_CONFIG, RPCMethod.SEND_SDP_OFFER):
+        registry.register(
+            method,
+            IdempotencyPolicy.NON_IDEMPOTENT_NO_RETRY,
+            notes="Interactive audio signaling: allocation and SDP replay are unqualified",
+        )
+
     _START_RESEARCH_NOT_IDEMPOTENT_NOTE = (
         "research start: no client-token slot in params and ResearchAPI.poll "
         "keyed by (notebook_id, query) is ambiguous when peer tasks exist with "

@@ -1,0 +1,38 @@
+{
+  "method_name": "SEND_SDP_OFFER",
+  "method_id": "eyWvXc",
+  "description": "Interactive Audio Overview signaling; synthetic values preserve the live-verified JSON-in-string shape. No real SDP or ICE credentials.",
+  "request": {
+    "params": [
+      "{\"type\":\"offer\",\"sdp\":\"SCRUBBED_OFFER\"}"
+    ],
+    "expected_f_req": [
+      [
+        [
+          "eyWvXc",
+          "[\"{\\\"type\\\":\\\"offer\\\",\\\"sdp\\\":\\\"SCRUBBED_OFFER\\\"}\"]",
+          null,
+          "generic"
+        ]
+      ]
+    ]
+  },
+  "response": {
+    "chunks": [
+      [
+        [
+          "wrb.fr",
+          "eyWvXc",
+          "[\"{\\\"type\\\":\\\"answer\\\",\\\"sdp\\\":\\\"SCRUBBED_ANSWER\\\"}\"]",
+          null,
+          null,
+          null,
+          "generic"
+        ]
+      ]
+    ],
+    "expected_decoded": [
+      "{\"type\":\"answer\",\"sdp\":\"SCRUBBED_ANSWER\"}"
+    ]
+  }
+}

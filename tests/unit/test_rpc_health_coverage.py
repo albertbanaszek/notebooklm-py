@@ -65,6 +65,10 @@ _DUMMY_NOTEBOOK_ID = "dummy-notebook-id-for-classification-only"
 
 MUTATING_SKIP_LIST: frozenset[str] = frozenset(
     {
+        # ICE credential/session allocation and SDP negotiation require an
+        # explicitly owned WebRTC lifecycle, never a generic read-only probe.
+        "GET_ICE_CONFIG",
+        "SEND_SDP_OFFER",
         # Creates a new notebook — only safe inside --full mode against a
         # throwaway notebook (handled by setup_temp_resources).
         "CREATE_NOTEBOOK",

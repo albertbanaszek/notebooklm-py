@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import os
 import subprocess
@@ -323,6 +324,7 @@ def test_cli_aggregate_timeout_writes_partial_report(
 
 def test_cli_reports_a_leaked_child_even_when_it_cancels_cleanly() -> None:
     cleaned = False
+    children: list[asyncio.Task[None]] = []
 
     async def child() -> None:
         nonlocal cleaned
@@ -333,7 +335,11 @@ def test_cli_reports_a_leaked_child_even_when_it_cancels_cleanly() -> None:
 
     async def leaks(name: str, *, operation_id: str, result: ScenarioResult) -> ScenarioResult:
         result.record("plan", faults=["leaked_child"])
-        asyncio.create_task(child(), name="unexpected-child")
+        # Keep the intentional leak alive until the CLI audits pending tasks.
+        # Otherwise GC can destroy the unreferenced task first under suite load.
+        children.append(asyncio.create_task(child(), name="unexpected-child"))
+        await asyncio.sleep(0)
+        gc.collect()
         result.require("misleading cleanup claim", True)
         return result
 

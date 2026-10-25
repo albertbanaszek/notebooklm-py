@@ -1,0 +1,36 @@
+{
+  "method_name": "GET_ICE_CONFIG",
+  "method_id": "Of0kDd",
+  "description": "Interactive Audio Overview signaling; synthetic values preserve the live-verified JSON-in-string shape. No real SDP or ICE credentials.",
+  "request": {
+    "params": [],
+    "expected_f_req": [
+      [
+        [
+          "Of0kDd",
+          "[]",
+          null,
+          "generic"
+        ]
+      ]
+    ]
+  },
+  "response": {
+    "chunks": [
+      [
+        [
+          "wrb.fr",
+          "Of0kDd",
+          "[\"{\\\"blockStatus\\\":\\\"NOT_BLOCKED\\\",\\\"iceServers\\\":[{\\\"urls\\\":[\\\"stun:example.test\\\"]}],\\\"iceTransportPolicy\\\":\\\"all\\\"}\"]",
+          null,
+          null,
+          null,
+          "generic"
+        ]
+      ]
+    ],
+    "expected_decoded": [
+      "{\"blockStatus\":\"NOT_BLOCKED\",\"iceServers\":[{\"urls\":[\"stun:example.test\"]}],\"iceTransportPolicy\":\"all\"}"
+    ]
+  }
+}
