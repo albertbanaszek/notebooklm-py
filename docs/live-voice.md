@@ -79,6 +79,13 @@ audio is never silently dropped to make room. Interruption invalidates queued
 audio before publishing its control event. Already delivered playback remains the
 caller's responsibility.
 
+A response exceeding `max_response_bytes` raises `DecodingError` when it reaches
+the SDK. gRPC also applies a finite transport receive cap of the larger of twice
+that limit or 4 MiB. Responses beyond the transport cap can instead surface as
+`RateLimitError`: gRPC reports the same `RESOURCE_EXHAUSTED` status used for server
+quota refusals, and the SDK does not inspect private status text to distinguish
+them.
+
 A terminal error discards pending events, wakes blocked sends/receives and remains
 available on subsequent operations. Clear playback on failure as well as
 interruption. Context exit raises an unobserved terminal failure when its body

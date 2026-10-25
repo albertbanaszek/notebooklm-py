@@ -42,7 +42,14 @@ class LiveTransport:
         channel = grpc.aio.secure_channel(
             TARGET,
             grpc.ssl_channel_credentials(),
-            options=(("grpc.max_receive_message_length", self._max_response_bytes),),
+            # Let ordinary oversized responses reach the SDK's size check,
+            # without allowing unbounded transport allocation.
+            options=(
+                (
+                    "grpc.max_receive_message_length",
+                    max(2 * self._max_response_bytes, 4 * 1024 * 1024),
+                ),
+            ),
         )
         self._channel = channel
         self._credential = credential

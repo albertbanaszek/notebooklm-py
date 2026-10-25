@@ -166,7 +166,7 @@ def test_control_fields_are_not_guessed_as_numeric_types():
 
 def test_compression_and_unknown_messages():
     decoder = Decoder()
-    assert decoder.feed(field(1, gzip.compress(transcript(role=2))) + b"\x18\x01") == (
+    assert decoder.feed(field(1, gzip.compress(transcript(role=2), mtime=0)) + b"\x18\x01") == (
         AudioTranscript("model", "hello", "item", True),
     )
     assert decoder.feed(envelope(field(99, b"unknown"), 0)) == ()
@@ -183,7 +183,7 @@ def test_compression_and_unknown_messages():
         field(1, b"x") + b"\x18\x02",
         fragment(1, 8, 1, b"x"),
         fragment(1, 1, 0, b"too long"),
-        field(1, gzip.compress(b"x" * 10000)) + b"\x18\x01",
+        field(1, gzip.compress(b"x" * 10000, mtime=0)) + b"\x18\x01",
     ],
 )
 def test_invalid_or_oversized_frames_are_bounded(frame):

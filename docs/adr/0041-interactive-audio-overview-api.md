@@ -45,14 +45,34 @@ in this initial implementation. Preserve the immediate unsupported-backend error
 Android interactivity can later reuse the codec through its own qualified signaling
 adapter; it does not make Web support general notebook Live Voice.
 
-## Validation and limits
+### Validation and limits
 
 Replay the private Web and Android spike frames locally against the decoder,
 without committing source-derived transcripts or credentials. Unit tests cover
 signaling shapes, artifact selection, lifecycle, cancellation, chunking,
 compression limits and sanitized failures. Pin Web RPC shapes in synthetic goldens
-and their no-retry classifications in the policy registry tests.
+and their no-retry classifications in the policy registry tests. A replay-only
+synthetic HTTP cassette checks the full signaling codec path; it is explicitly
+labeled and supplies no additional live-server evidence.
 
 The aiortc example is an optional integration sketch, not a qualified native-media
 implementation. Live evidence used Chromium; waveform quality, all account
 cohorts, quota details and reconnection remain unqualified.
+
+## Consequences
+
+Applications can reuse their existing WebRTC stack without adding native media
+libraries to the SDK. They must own peer connection cleanup and pass data-channel
+frames to the session decoder. The API supports completed Audio Overviews only;
+notebook-bound voice, automatic reconnection and media quality guarantees remain
+outside this Web implementation.
+
+## Alternatives considered
+
+- Bundle aiortc and own media transport: rejected because it adds native dependencies
+  and media lifecycle responsibilities beyond signaling.
+- Own a background data-channel reader: rejected because the caller owns the peer
+  connection and its callback model. Explicit frame delivery keeps that ownership clear.
+- Reuse Android StreamLiveSession on Web: rejected because the qualified Web path
+  uses artifact-bound WebRTC signaling, while Android Live Voice uses notebook-bound
+  bidirectional gRPC. The evidence does not establish interchangeable protocols.

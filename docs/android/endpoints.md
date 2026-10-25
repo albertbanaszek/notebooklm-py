@@ -208,7 +208,7 @@ Status vocabulary below:
 | GetDriveSourceStatus | no exact caller; source freshness uses `CheckSourceFreshness` |
 | GetIceConfig | Interactive Audio Overview gRPC spike verified; SDK signaling currently Web-only |
 | SendSdpOffer | Interactive Audio Overview gRPC spike verified; SDK signaling currently Web-only |
-| StreamLiveSession | Bidirectional Live Voice; direct audio/token probes verified, public API not implemented ([evidence](live-session-static-evidence.md)) |
+| StreamLiveSession | Experimental Android `client.live.connect()` with reconnection disabled; direct audio/token probes verified ([usage](../live-voice.md), [evidence](live-session-static-evidence.md)) |
 | ListExpertIntelligenceContent | no public API |
 | LogInteractionEvent | telemetry intentionally not implemented |
 | SubmitFeedback | no public API |

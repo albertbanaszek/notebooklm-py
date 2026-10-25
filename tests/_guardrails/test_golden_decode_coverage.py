@@ -101,6 +101,19 @@ _USAGE_VCR = "tests/integration/test_usage_vcr.py"
 GoldenPointer = tuple[str, str]
 
 GOLDEN_COVERAGE: dict[RPCMethod, tuple[GoldenPointer, ...]] = {
+    # Hand-built synthetic signaling contract: parsed ICE and SDP leaves are pinned.
+    RPCMethod.GET_ICE_CONFIG: (
+        (
+            "tests/integration/test_interactive_audio_signaling_vcr.py",
+            "test_synthetic_interactive_audio_signaling_contract",
+        ),
+    ),
+    RPCMethod.SEND_SDP_OFFER: (
+        (
+            "tests/integration/test_interactive_audio_signaling_vcr.py",
+            "test_synthetic_interactive_audio_signaling_contract",
+        ),
+    ),
     # Synchronous discovery (#2283): pinned where its only decoded contract
     # already reads every expected value back out of the recorded payload.
     RPCMethod.DISCOVER_SOURCES: (
