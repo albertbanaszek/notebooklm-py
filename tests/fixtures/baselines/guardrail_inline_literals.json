@@ -102,7 +102,7 @@
     "LOC": 42
   },
   "tests/_guardrails/test_golden_decode_coverage.py": {
-    "GOLDEN_COVERAGE": 54
+    "GOLDEN_COVERAGE": 58
   },
   "tests/_guardrails/test_login_package_dag.py": {
     "ALLOWED_EDGES": 43
