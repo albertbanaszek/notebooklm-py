@@ -372,6 +372,8 @@ _TYPES_EXCEPTION_REEXPORTS = [
 ]
 
 _TOP_LEVEL_EXCEPTION_EXPORTS = [
+    "LiveSessionClosedError",
+    "LiveBufferOverflowError",
     "AmbiguousResearchTaskError",
     "ArtifactDownloadError",
     "ArtifactError",

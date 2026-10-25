@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Experimental Android Live Voice (#2509).** Android clients can open
+  notebook-bound `client.live.connect(...)` sessions with audio input/output,
+  transcripts, interruption events and bounded lifecycle cleanup. Recording,
+  playback and codecs remain application-owned; automatic reconnection is not enabled.
+
 ### Changed
 
 - **The Windows CLI runs on asyncio's default event loop (#2485).** The

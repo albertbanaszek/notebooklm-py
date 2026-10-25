@@ -73,7 +73,7 @@
     {
       "callee": "importlib.import_module",
       "expression": "module_name",
-      "lineno": 126,
+      "lineno": 127,
       "scope": "__getattr__",
       "scope_kind": "function",
       "source": "notebooklm.client",
@@ -1153,6 +1153,15 @@
       "scope_kind": "module",
       "source": "notebooklm._android.labels",
       "target": "notebooklm.types",
+      "type_only": false
+    },
+    {
+      "kind": "from",
+      "lineno": 5,
+      "scope": null,
+      "scope_kind": "module",
+      "source": "notebooklm._android.live_wire",
+      "target": "notebooklm.exceptions",
       "type_only": false
     },
     {
@@ -3812,7 +3821,7 @@
     },
     {
       "kind": "from",
-      "lineno": 231,
+      "lineno": 241,
       "scope": "_assemble_client",
       "scope_kind": "function",
       "source": "notebooklm._client_assembly",
@@ -3821,7 +3830,7 @@
     },
     {
       "kind": "from",
-      "lineno": 291,
+      "lineno": 301,
       "scope": "_assemble_client",
       "scope_kind": "function",
       "source": "notebooklm._client_assembly",
@@ -3988,6 +3997,33 @@
       "scope_kind": "module",
       "source": "notebooklm._labels",
       "target": "notebooklm._runtime.call_supervisor",
+      "type_only": false
+    },
+    {
+      "kind": "from",
+      "lineno": 33,
+      "scope": null,
+      "scope_kind": "module",
+      "source": "notebooklm._live",
+      "target": "notebooklm._android.live_wire",
+      "type_only": true
+    },
+    {
+      "kind": "from",
+      "lineno": 65,
+      "scope": "LiveSession.__init__",
+      "scope_kind": "function",
+      "source": "notebooklm._live",
+      "target": "notebooklm._android.live_wire",
+      "type_only": false
+    },
+    {
+      "kind": "from",
+      "lineno": 460,
+      "scope": "LiveAPI.connect",
+      "scope_kind": "function",
+      "source": "notebooklm._live",
+      "target": "notebooklm._android.live_transport",
       "type_only": false
     },
     {
@@ -9698,7 +9734,7 @@
     },
     {
       "kind": "from",
-      "lineno": 73,
+      "lineno": 74,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.client",
@@ -9707,7 +9743,7 @@
     },
     {
       "kind": "from",
-      "lineno": 81,
+      "lineno": 82,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.client",
@@ -9716,7 +9752,7 @@
     },
     {
       "kind": "from",
-      "lineno": 82,
+      "lineno": 83,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.client",
@@ -9725,7 +9761,7 @@
     },
     {
       "kind": "from",
-      "lineno": 86,
+      "lineno": 87,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.client",
@@ -11868,8 +11904,8 @@
   ],
   "subsystems": {
     "android": {
-      "lines": 16483,
-      "modules": 54
+      "lines": 16682,
+      "modules": 56
     },
     "app": {
       "lines": 14530,
@@ -11888,15 +11924,15 @@
       "modules": 42
     },
     "root": {
-      "lines": 27680,
-      "modules": 92
+      "lines": 28289,
+      "modules": 94
     },
     "rpc": {
       "lines": 385,
       "modules": 3
     },
     "runtime": {
-      "lines": 2899,
+      "lines": 2903,
       "modules": 11
     },
     "server": {
@@ -11913,14 +11949,14 @@
     }
   },
   "summary": {
-    "authored_lines": 154932,
-    "authored_modules": 494,
+    "authored_lines": 155744,
+    "authored_modules": 498,
     "class_local_edges": 0,
-    "cross_subsystem_edges": 1307,
+    "cross_subsystem_edges": 1311,
     "dynamic_import_calls": 10,
-    "function_local_edges": 95,
-    "module_level_edges": 1212,
-    "type_only_edges": 139
+    "function_local_edges": 97,
+    "module_level_edges": 1214,
+    "type_only_edges": 140
   },
   "version": 1
 }

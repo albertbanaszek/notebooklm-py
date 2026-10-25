@@ -2097,6 +2097,7 @@ src/notebooklm/
 ├── __main__.py                  # `python -m notebooklm` entry point
 ├── client.py                    # NotebookLMClient
 ├── auth.py                      # Authentication facade — eager auth aliases + narrow lazy browser capabilities (see file table above)
+├── live.py                      # Public Android Live Voice events and errors
 ├── types.py                     # Dataclasses
 ├── artifacts.py                 # Public artifact-generation retry helpers
 ├── config.py                    # Public config facade over _env
@@ -2115,6 +2116,7 @@ src/notebooklm/
 ├── _backoff.py                  # Shared retry backoff calculation
 ├── _callbacks.py                # Sync/async callback invocation helper
 ├── _adapter_support.py          # Small transport-neutral adapter support leaf
+├── _live.py                     # Epoch-owned Android Live sessions, buffers and cleanup
 ├── _client_assembly.py          # Typed graph composition + sole client installer
 ├── _http_client_factory.py      # Captured private HTTPX/curl transfer constructors
 ├── _client_compat.py            # Pure 0.x Android-to-Web sidecar factory/proxy
@@ -2216,6 +2218,8 @@ src/notebooklm/
 │   │   └── usage.py             # Presence-preserving account/quota projection
 │   ├── errors.py                # Sanitized gRPC status/error mapping
 │   ├── notebooks.py             # Selected Android notebook reads/mutations, incl. native recent-removal
+│   ├── live_transport.py        # Dedicated Live bidi channel using shared bearer ownership
+│   ├── live_wire.py             # Private notebook Live protobuf codec
 │   ├── session.py               # Supervised lazy gRPC transport
 │   ├── epoch.py                 # Session-tagged task-local workflow epoch propagation
 │   ├── retry_policy.py          # Web-registry-derived Android replay-safety manifest
