@@ -46,6 +46,9 @@ except PackageNotFoundError:
         __version__,
     )
 
+# Public API: Android Live Voice
+from ._live import LiveSession
+
 # Public API: Authentication
 from .auth import AuthTokens
 
@@ -120,6 +123,17 @@ from .exceptions import (
     ValidationError,
     # Cross-domain umbrellas (wait/poll timeouts)
     WaitTimeoutError,
+)
+from .live import (
+    LiveAudio,
+    LiveBufferOverflowError,
+    LiveEstablished,
+    LiveEvent,
+    LiveGoAway,
+    LiveInterrupted,
+    LiveSessionClosedError,
+    LiveTranscript,
+    LiveTurnComplete,
 )
 
 # Public API: Types and dataclasses
@@ -245,6 +259,17 @@ __all__ = [
     "__version__",
     # Client (main entry point)
     "NotebookLMClient",
+    # Android Live Voice
+    "LiveSession",
+    "LiveAudio",
+    "LiveBufferOverflowError",
+    "LiveEstablished",
+    "LiveEvent",
+    "LiveGoAway",
+    "LiveInterrupted",
+    "LiveSessionClosedError",
+    "LiveTranscript",
+    "LiveTurnComplete",
     # Auth
     "AuthTokens",
     # Observability
