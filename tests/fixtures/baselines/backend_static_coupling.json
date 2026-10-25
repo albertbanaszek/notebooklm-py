@@ -4019,7 +4019,7 @@
     },
     {
       "kind": "from",
-      "lineno": 460,
+      "lineno": 462,
       "scope": "LiveAPI.connect",
       "scope_kind": "function",
       "source": "notebooklm._live",
@@ -11924,7 +11924,7 @@
       "modules": 42
     },
     "root": {
-      "lines": 28289,
+      "lines": 28291,
       "modules": 94
     },
     "rpc": {
@@ -11949,7 +11949,7 @@
     }
   },
   "summary": {
-    "authored_lines": 155777,
+    "authored_lines": 155779,
     "authored_modules": 498,
     "class_local_edges": 0,
     "cross_subsystem_edges": 1311,

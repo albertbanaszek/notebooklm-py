@@ -511,7 +511,6 @@ async def test_absolute_deadline_survives_admission_settlement(harness, monkeypa
     settling, release = asyncio.Event(), asyncio.Event()
     expected = None
     first = True
-    monkeypatch.setattr(harness.supervisor, "_operation_timeout", 10)
 
     def capture_deadline(*args):
         nonlocal expected
@@ -530,7 +529,10 @@ async def test_absolute_deadline_survives_admission_settlement(harness, monkeypa
     monkeypatch.setattr(harness.supervisor, "_finish_generation_token", settle)
 
     async def connect():
-        async with harness.api.connect("nb") as session:
+        async with (
+            harness.supervisor.operation_scope("outer", timeout=10),
+            harness.api.connect("nb") as session,
+        ):
             assert harness.instances[0].deadline == expected
             assert session._establishment_deadline <= expected
 
@@ -608,3 +610,29 @@ async def test_simultaneous_bootstrap_and_caller_cancellation_preserves_caller(h
         await caller
     assert harness.instances[0].closed
     assert not harness.api._sessions
+
+
+@pytest.mark.asyncio
+async def test_interruption_reclaims_full_audio_queue_before_input_transcription(harness):
+    async with harness.api.connect("nb", max_events=2) as session:
+        events = session.events()
+        await next_event(events)
+        transport = harness.instances[0]
+        transport.incoming.put_nowait(audio(b"first"))
+        transport.incoming.put_nowait(audio(b"second"))
+        transport.incoming.put_nowait(content(field(5, field(1, "question")) + b"\x20\x01"))
+        transport.incoming.put_nowait(None)
+        await session._reader
+        observed = [event async for event in events]
+        assert [type(event) for event in observed] == [LiveTranscript, LiveInterrupted]
+        assert observed[0].text == "question"
+        assert session._audio_bytes == 0
+
+
+@pytest.mark.asyncio
+async def test_client_default_operation_timeout_does_not_limit_stream(harness, monkeypatch):
+    monkeypatch.setattr(harness.supervisor, "_operation_timeout", 10)
+    async with harness.api.connect("nb") as session:
+        assert session._lifetime is None
+        assert harness.instances[0].deadline is None
+        assert isinstance(await next_event(session.events()), LiveEstablished)

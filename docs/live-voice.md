@@ -48,6 +48,8 @@ microphone nor plays sound. Audio input was qualified with mono PCM16 at 16 kHz;
 output was observed as PCM at 24 kHz. Inspect each output event's MIME type.
 
 Entry waits for session establishment, with a configurable 30-second timeout.
+The client-wide operation timeout does not cap the stream lifetime; an explicit
+enclosing operation deadline still applies.
 `source_ids=None` omits the filter; a nonempty sequence supplies explicit source
 IDs. Empty filters are rejected rather than guessing their server meaning.
 `transcribe=False` omits both transcription flags. No public usage-counter or

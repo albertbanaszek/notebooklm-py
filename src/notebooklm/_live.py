@@ -220,13 +220,15 @@ class LiveSession:
             generation = content.integer(7) if content.has(7) else None
             if generation is not None and generation >= (1 << 63):
                 generation -= 1 << 64
-            if content.has(5):
-                self._transcript("user", content.message(5), generation)
             interrupted = bool(content.integer(4))
             if interrupted:
+                # Retire invalidated audio before any new event needs queue capacity.
                 self._queue = deque(e for e in self._queue if not isinstance(e, LiveAudio))
                 self._audio_bytes = 0
                 self._segments.pop("model", None)
+            if content.has(5):
+                self._transcript("user", content.message(5), generation)
+            if interrupted:
                 self._emit(LiveInterrupted, generation)
             if content.has(6):
                 self._transcript("model", content.message(6), generation)
@@ -451,7 +453,7 @@ class LiveAPI:
         try:
             # Admission covers registration only, not the lifetime stream. There is
             # no await between checking the registry and publishing the new owner.
-            async with self._supervisor.operation_scope("live.connect") as lease:
+            async with self._supervisor.operation_scope("live.connect", timeout=None) as lease:
                 epoch = lease.epoch
                 if epoch in self._sessions:
                     raise ConfigurationError("Only one Live Voice session is allowed per client")
