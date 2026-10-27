@@ -30,6 +30,10 @@ stub change is needed. The option is attached before the Android creation
 fingerprint is calculated, so immediate and deferred requests have distinct
 journal identities.
 
+Two additional live subprocess checks exercised the CLI itself: a Web report and
+an Android quiz with `--later --json`. Both returned `scheduled`, and independent
+API reads confirmed status 7. Their disposable notebooks were deleted afterward.
+
 Cinematic video was not verified and rejects deferred requests before submission.
 Data tables and mind maps are outside the requested surface. Immediate generation
 keeps its existing payload and remains the default. Scheduling is subject to
