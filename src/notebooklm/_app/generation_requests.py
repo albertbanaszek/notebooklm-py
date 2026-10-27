@@ -363,9 +363,12 @@ class _SourcedGenerationRequest(_GenerationRequestBase):
 
 @dataclass(frozen=True, kw_only=True)
 class _DeferredGenerationRequest(_SourcedGenerationRequest):
+    """A sourced request that can be queued instead of generated immediately."""
+
     later: bool = False
 
     def __post_init__(self) -> None:
+        """Validate deferred flags before any generation or source-resolution I/O."""
         super().__post_init__()
         if not isinstance(self.later, bool):
             raise ValidationError("later must be a bool")

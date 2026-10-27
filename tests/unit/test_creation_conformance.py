@@ -461,6 +461,7 @@ async def test_deferred_generation_wire(backend, creation_api, family, later):
 )
 @pytest.mark.parametrize("later", [1, "true", None])
 async def test_later_requires_bool_before_source_lookup(creation_api, family, later):
+    """Reject invalid scheduling values before source resolution on either backend."""
     api, observed, _, notebooks = creation_api
     with pytest.raises(ValidationError, match="later must be a bool"):
         await getattr(api, f"generate_{family}")("nb", later=later)
@@ -473,6 +474,7 @@ async def test_later_requires_bool_before_source_lookup(creation_api, family, la
 
 @pytest.mark.asyncio
 async def test_cinematic_later_is_rejected_before_source_lookup(creation_api):
+    """Keep unverified cinematic scheduling from reaching a protocol hook."""
     api, observed, _, _ = creation_api
     with pytest.raises(ValidationError, match="not supported for cinematic video"):
         await api.generate_video("nb", video_format=VideoFormat.CINEMATIC, later=True)

@@ -199,6 +199,7 @@ def test_audio_later_and_wait_are_incompatible() -> None:
 )
 @pytest.mark.asyncio
 async def test_deferred_builder_dispatches_later_without_waiting(kind) -> None:
+    """Forward deferred requests to each API method without starting a waiter."""
     from notebooklm._app.generation_requests import build_generation_request
 
     client = _client()
@@ -219,6 +220,7 @@ async def test_deferred_builder_dispatches_later_without_waiting(kind) -> None:
     "kind", ["audio", "video", "slide-deck", "report", "quiz", "flashcards", "infographic"]
 )
 def test_deferred_builder_rejects_wait_and_invalid_bool(kind) -> None:
+    """Validate scheduling inputs before dispatch for every supported family."""
     from notebooklm._app.generation_requests import build_generation_request
     from notebooklm.exceptions import ValidationError
 
@@ -239,6 +241,7 @@ def test_deferred_builder_rejects_wait_and_invalid_bool(kind) -> None:
     ],
 )
 def test_deferred_builder_rejects_unsupported_kinds(kind, options) -> None:
+    """Never silently drop the deferred flag for unsupported generation kinds."""
     from notebooklm._app.generation_requests import build_generation_request
     from notebooklm.exceptions import ValidationError
 

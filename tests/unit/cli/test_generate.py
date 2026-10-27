@@ -2248,6 +2248,7 @@ class TestArtifactGenerationExitCodes:
 )
 @pytest.mark.parametrize("json_output", [False, True])
 def test_generate_later_reports_scheduled(runner, monkeypatch, json_output, kind):
+    """Expose the queued task through human and JSON output for every CLI family."""
     from notebooklm.types import GenerationStatus
 
     client = create_mock_client()
@@ -2278,6 +2279,7 @@ def test_generate_later_reports_scheduled(runner, monkeypatch, json_output, kind
 )
 @pytest.mark.parametrize("json_output", [False, True])
 def test_generate_later_rejects_wait_before_generation(runner, monkeypatch, json_output, kind):
+    """Reject conflicting CLI flags without submitting a generation request."""
     client = create_mock_client()
     method_name = "generate_" + kind.replace("-", "_")
     args = ["generate", kind, "-n", "nb_123", "--later", "--wait"]
@@ -2297,6 +2299,7 @@ def test_generate_later_rejects_wait_before_generation(runner, monkeypatch, json
 @pytest.mark.parametrize("args", [["video", "--format", "cinematic"], ["cinematic-video"]])
 @pytest.mark.parametrize("json_output", [False, True])
 def test_cinematic_later_rejected_before_generation(runner, monkeypatch, args, json_output):
+    """Reject deferred cinematic requests through both command spellings."""
     client = create_mock_client()
     monkeypatch.setattr(
         helpers_module,

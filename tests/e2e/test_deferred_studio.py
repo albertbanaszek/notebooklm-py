@@ -28,6 +28,7 @@ pytestmark = [
     "family", ["video", "report", "study_guide", "quiz", "flashcards", "infographic", "slide_deck"]
 )
 async def test_deferred_studio_is_scheduled_and_persisted(backend, family):
+    """Verify scheduled create, read and poll states, then clean up owned resources."""
     config = ClientConfig(
         backend=AndroidBackendConfig() if backend == "android" else WebBackendConfig()
     )
@@ -65,6 +66,7 @@ async def test_deferred_studio_is_scheduled_and_persisted(backend, family):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("backend,kind", [("web", "report"), ("android", "quiz")])
 async def test_cli_deferred_generation_is_persisted(backend, kind):
+    """Verify real CLI scheduling through an independent API read and owned cleanup."""
     config = ClientConfig(
         backend=AndroidBackendConfig() if backend == "android" else WebBackendConfig()
     )
