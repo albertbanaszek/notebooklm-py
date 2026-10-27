@@ -14,7 +14,16 @@ from typing import Any, cast
 import httpx
 
 from .._artifact.creation import InteractiveMindMapCreationRequest
-from .._artifact.creation_normalized import NormalizedArtifactCreationRequest, NormalizedAudio
+from .._artifact.creation_normalized import (
+    NormalizedArtifactCreationRequest,
+    NormalizedAudio,
+    NormalizedFlashcards,
+    NormalizedInfographic,
+    NormalizedQuiz,
+    NormalizedReport,
+    NormalizedSlideDeck,
+    NormalizedVideo,
+)
 from .._artifact.creation_policy import ANDROID_CREATION_POLICY
 from .._artifact.download_selection import PreparedDownloadCache
 from .._artifacts import ArtifactsAPI, _incomplete_lookup_error
@@ -408,12 +417,6 @@ class AndroidArtifactsAPI(AndroidArtifactTransferMixin, AndroidArtifactReadMixin
                     ),
                 ),
             )
-            if creation.later:
-                request.MergeFromString(
-                    _WIRE_PROTO.WireCreateArtifactDeferredProjection(
-                        deferred_generation=_WIRE_PROTO.WireDeferredGenerationOptions(enabled=True)
-                    ).SerializeToString()
-                )
             expected_type = ArtifactTypeCode.AUDIO.value
             expected_variant = None
             family_label = "audio"
@@ -423,6 +426,27 @@ class AndroidArtifactsAPI(AndroidArtifactTransferMixin, AndroidArtifactReadMixin
             expected_type = plan.expected_type
             expected_variant = plan.expected_variant
             family_label = plan.family_label
+
+        if (
+            isinstance(
+                creation,
+                (
+                    NormalizedAudio,
+                    NormalizedVideo,
+                    NormalizedReport,
+                    NormalizedQuiz,
+                    NormalizedFlashcards,
+                    NormalizedInfographic,
+                    NormalizedSlideDeck,
+                ),
+            )
+            and creation.later
+        ):
+            request.MergeFromString(
+                _WIRE_PROTO.WireCreateArtifactDeferredProjection(
+                    deferred_generation=_WIRE_PROTO.WireDeferredGenerationOptions(enabled=True)
+                ).SerializeToString()
+            )
 
         fingerprint = hashlib.sha256(
             b"\0".join(

@@ -362,12 +362,7 @@ class _SourcedGenerationRequest(_GenerationRequestBase):
 
 
 @dataclass(frozen=True, kw_only=True)
-class AudioGenerationRequest(_SourcedGenerationRequest):
-    kind: Literal["audio"] = "audio"
-    language: OptionalText = UNSET
-    instructions: OptionalText = UNSET
-    audio_format: AudioFormat = AudioFormat.DEEP_DIVE
-    audio_length: AudioLength = AudioLength.DEFAULT
+class _DeferredGenerationRequest(_SourcedGenerationRequest):
     later: bool = False
 
     def __post_init__(self) -> None:
@@ -379,7 +374,16 @@ class AudioGenerationRequest(_SourcedGenerationRequest):
 
 
 @dataclass(frozen=True, kw_only=True)
-class VideoGenerationRequest(_SourcedGenerationRequest):
+class AudioGenerationRequest(_DeferredGenerationRequest):
+    kind: Literal["audio"] = "audio"
+    language: OptionalText = UNSET
+    instructions: OptionalText = UNSET
+    audio_format: AudioFormat = AudioFormat.DEEP_DIVE
+    audio_length: AudioLength = AudioLength.DEFAULT
+
+
+@dataclass(frozen=True, kw_only=True)
+class VideoGenerationRequest(_DeferredGenerationRequest):
     kind: Literal["video"] = "video"
     language: OptionalText = UNSET
     instructions: OptionalText = UNSET
@@ -392,6 +396,8 @@ class VideoGenerationRequest(_SourcedGenerationRequest):
         prompt = self.style_prompt
         normalized = prompt.strip() if isinstance(prompt, str) else prompt
         has_prompt = isinstance(normalized, str) and bool(normalized)
+        if self.later and self.video_format is VideoFormat.CINEMATIC:
+            raise ValidationError("Deferred generation is not supported for cinematic video")
         if self.video_format is VideoFormat.CINEMATIC:
             if has_prompt:
                 raise GenerationRequestValidationError(
@@ -454,7 +460,7 @@ class CinematicVideoGenerationRequest(_SourcedGenerationRequest):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SlideDeckGenerationRequest(_SourcedGenerationRequest):
+class SlideDeckGenerationRequest(_DeferredGenerationRequest):
     kind: Literal["slide-deck"] = "slide-deck"
     language: OptionalText = UNSET
     instructions: OptionalText = UNSET
@@ -480,7 +486,7 @@ class ReviseSlideGenerationRequest(_GenerationRequestBase):
 
 
 @dataclass(frozen=True, kw_only=True)
-class QuizGenerationRequest(_SourcedGenerationRequest):
+class QuizGenerationRequest(_DeferredGenerationRequest):
     kind: Literal["quiz"] = "quiz"
     instructions: OptionalText = UNSET
     quantity: QuizQuantity = QuizQuantity.STANDARD
@@ -488,7 +494,7 @@ class QuizGenerationRequest(_SourcedGenerationRequest):
 
 
 @dataclass(frozen=True, kw_only=True)
-class FlashcardsGenerationRequest(_SourcedGenerationRequest):
+class FlashcardsGenerationRequest(_DeferredGenerationRequest):
     kind: Literal["flashcards"] = "flashcards"
     instructions: OptionalText = UNSET
     quantity: QuizQuantity = QuizQuantity.STANDARD
@@ -496,7 +502,7 @@ class FlashcardsGenerationRequest(_SourcedGenerationRequest):
 
 
 @dataclass(frozen=True, kw_only=True)
-class InfographicGenerationRequest(_SourcedGenerationRequest):
+class InfographicGenerationRequest(_DeferredGenerationRequest):
     kind: Literal["infographic"] = "infographic"
     language: OptionalText = UNSET
     instructions: OptionalText = UNSET
@@ -528,7 +534,7 @@ class MindMapGenerationRequest(_SourcedGenerationRequest):
 
 
 @dataclass(frozen=True, kw_only=True)
-class ReportGenerationRequest(_SourcedGenerationRequest):
+class ReportGenerationRequest(_DeferredGenerationRequest):
     kind: Literal["report"] = "report"
     language: OptionalText = UNSET
     report_format: ReportFormat = ReportFormat.BRIEFING_DOC
@@ -670,6 +676,7 @@ def build_generation_request(
     language: OptionalText = UNSET,
     instructions: OptionalText = UNSET,
     wait: bool = False,
+    later: bool = False,
     timeout: float = 300.0,
     interval: float = 2.0,
     max_retries: int = 0,
@@ -693,6 +700,9 @@ def build_generation_request(
     extra_instructions: OptionalText = UNSET,
 ) -> GenerationRequest:
     """Build one frozen variant using the canonical per-kind option contract."""
+
+    if later and kind in ("cinematic-video", "data-table", "mind-map", "revise-slide"):
+        raise ValidationError(f"Deferred generation is not supported for {kind}")
 
     normalized = _normalize_generation_options(
         kind,
@@ -723,6 +733,7 @@ def build_generation_request(
             instructions=instructions,
             audio_format=normalized["audio_format"],  # type: ignore[arg-type]
             audio_length=normalized["audio_length"],  # type: ignore[arg-type]
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,
@@ -743,6 +754,7 @@ def build_generation_request(
             ),
             video_style=normalized.get("video_style", VideoStyle.AUTO_SELECT),  # type: ignore[arg-type]
             style_prompt=normalized.get("style_prompt", UNSET),  # type: ignore[arg-type]
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,
@@ -768,6 +780,7 @@ def build_generation_request(
             instructions=instructions,
             slide_format=normalized["slide_format"],  # type: ignore[arg-type]
             slide_length=normalized["slide_length"],  # type: ignore[arg-type]
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,
@@ -792,6 +805,7 @@ def build_generation_request(
             instructions=instructions,
             quantity=normalized["quantity"],  # type: ignore[arg-type]
             difficulty=normalized["difficulty"],  # type: ignore[arg-type]
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,
@@ -804,6 +818,7 @@ def build_generation_request(
             instructions=instructions,
             quantity=normalized["quantity"],  # type: ignore[arg-type]
             difficulty=normalized["difficulty"],  # type: ignore[arg-type]
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,
@@ -818,6 +833,7 @@ def build_generation_request(
             orientation=normalized["orientation"],  # type: ignore[arg-type]
             detail_level=normalized["detail_level"],  # type: ignore[arg-type]
             style=normalized["infographic_style"],  # type: ignore[arg-type]
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,
@@ -863,6 +879,7 @@ def build_generation_request(
             ),
             custom_prompt=instructions,
             extra_instructions=extra_instructions,
+            later=later,
             wait=wait,
             timeout=timeout,
             interval=interval,

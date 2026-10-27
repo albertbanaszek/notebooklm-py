@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Deferred Studio generation (#2519).** Queue videos, reports (including study
+  guides), quizzes, flashcards, infographics and slide decks with `later=True`
+  in Python or `--later` in the CLI on Web and Android. Scheduled jobs return
+  `scheduled`; combining `--later` with `--wait` is rejected. Cinematic video
+  remains unsupported for deferred generation.
+
 - **Experimental Android Live Voice (#2509).** Android clients can open
   notebook-bound `client.live.connect(...)` sessions with audio input/output,
   transcripts, interruption events and bounded lifecycle cleanup. Recording,

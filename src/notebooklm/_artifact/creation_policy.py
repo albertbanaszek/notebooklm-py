@@ -142,6 +142,7 @@ def normalize_creation(
             format_code,
             style_code,
             prompt,
+            request.later,
         )
     if isinstance(request, raw.CinematicVideoCreationRequest):
         return normalized.NormalizedCinematicVideo(
@@ -169,7 +170,9 @@ def normalize_creation(
             title, description, directive = _REPORT_CONFIGS[fmt]
             if extra:
                 directive = f"{directive}\n\n{extra}"
-        return normalized.NormalizedReport(nb, sources, language, title, description, directive)
+        return normalized.NormalizedReport(
+            nb, sources, language, title, description, directive, request.later
+        )
     if isinstance(request, raw.QuizCreationRequest):
         cls = (
             normalized.NormalizedFlashcards
@@ -182,6 +185,7 @@ def normalize_creation(
             _text(request.instructions, "instructions", policy),
             _code(request.quantity, DEFAULT_QUIZ_QUANTITY, "quantity", strict=True),
             _code(request.difficulty, DEFAULT_QUIZ_DIFFICULTY, "difficulty", strict=True),
+            request.later,
         )
     if isinstance(request, raw.InfographicCreationRequest):
         return normalized.NormalizedInfographic(
@@ -194,6 +198,7 @@ def normalize_creation(
             ),
             _code(request.detail_level, InfographicDetail.STANDARD, "detail_level", strict=strict),
             _code(request.style, InfographicStyle.AUTO_SELECT, "style", strict=strict),
+            request.later,
         )
     if isinstance(request, raw.SlideDeckCreationRequest):
         return normalized.NormalizedSlideDeck(
@@ -205,6 +210,7 @@ def normalize_creation(
                 request.slide_format, SlideDeckFormat.DETAILED_DECK, "slide_format", strict=strict
             ),
             _code(request.slide_length, SlideDeckLength.DEFAULT, "slide_length", strict=strict),
+            request.later,
         )
     if isinstance(request, raw.DataTableCreationRequest):
         return normalized.NormalizedDataTable(

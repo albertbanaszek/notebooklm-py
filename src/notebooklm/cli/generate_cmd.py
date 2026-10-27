@@ -523,6 +523,7 @@ def generate_audio(
 
 
 @generate.command("video")
+@click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
 @prompt_file_option
 @notebook_option
@@ -580,6 +581,7 @@ def generate_video(
     style_prompt,
     language,
     source_ids,
+    later,
     wait,
     timeout,
     interval,
@@ -629,6 +631,7 @@ def generate_video(
             video_format=_VIDEO_FORMAT_MAP[video_format],
             video_style=_VIDEO_STYLE_MAP[style],
             style_prompt=style_prompt,
+            later=later,
             wait=wait,
             timeout=(
                 timeout
@@ -669,6 +672,7 @@ alias_command(
 
 
 @generate.command("slide-deck")
+@click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
 @prompt_file_option
 @notebook_option
@@ -702,6 +706,7 @@ def generate_slide_deck(
     deck_length,
     language,
     source_ids,
+    later,
     wait,
     timeout,
     interval,
@@ -727,6 +732,7 @@ def generate_slide_deck(
         instructions=description or None,
         slide_format=_SLIDE_FORMAT_MAP[deck_format],
         slide_length=_SLIDE_LENGTH_MAP[deck_length],
+        later=later,
         wait=wait,
         timeout=timeout,
         interval=interval,
@@ -798,6 +804,7 @@ def generate_revise_slide(
 
 
 @generate.command("quiz")
+@click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
 @prompt_file_option
 @notebook_option
@@ -827,6 +834,7 @@ def generate_quiz(
     quantity,
     difficulty,
     source_ids,
+    later,
     wait,
     timeout,
     interval,
@@ -851,6 +859,7 @@ def generate_quiz(
         instructions=description or None,
         quantity=_QUIZ_QUANTITY_MAP[quantity],
         difficulty=_QUIZ_DIFFICULTY_MAP[difficulty],
+        later=later,
         wait=wait,
         timeout=timeout,
         interval=interval,
@@ -860,6 +869,7 @@ def generate_quiz(
 
 
 @generate.command("flashcards")
+@click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
 @prompt_file_option
 @notebook_option
@@ -889,6 +899,7 @@ def generate_flashcards(
     quantity,
     difficulty,
     source_ids,
+    later,
     wait,
     timeout,
     interval,
@@ -913,6 +924,7 @@ def generate_flashcards(
         instructions=description or None,
         quantity=_QUIZ_QUANTITY_MAP[quantity],
         difficulty=_QUIZ_DIFFICULTY_MAP[difficulty],
+        later=later,
         wait=wait,
         timeout=timeout,
         interval=interval,
@@ -922,6 +934,7 @@ def generate_flashcards(
 
 
 @generate.command("infographic")
+@click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
 @prompt_file_option
 @notebook_option
@@ -960,6 +973,7 @@ def generate_infographic(
     style,
     language,
     source_ids,
+    later,
     wait,
     timeout,
     interval,
@@ -986,6 +1000,7 @@ def generate_infographic(
         orientation=_INFOGRAPHIC_ORIENTATION_MAP[orientation],
         detail_level=_INFOGRAPHIC_DETAIL_MAP[detail],
         style=_INFOGRAPHIC_STYLE_MAP[style],
+        later=later,
         wait=wait,
         timeout=timeout,
         interval=interval,
@@ -1096,6 +1111,7 @@ def generate_mind_map(
 
 
 @generate.command("report")
+@click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
 @prompt_file_option
 @click.option(
@@ -1128,6 +1144,7 @@ def generate_report_cmd(
     source_ids,
     language,
     append_instructions,
+    later,
     wait,
     timeout,
     interval,
@@ -1168,6 +1185,7 @@ def generate_report_cmd(
         report_format=_REPORT_FORMAT_MAP[actual_format],
         custom_prompt=custom_prompt,
         extra_instructions=append_instructions,
+        later=later,
         wait=wait,
         timeout=timeout,
         interval=interval,

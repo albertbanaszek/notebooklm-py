@@ -2243,15 +2243,18 @@ class TestArtifactGenerationExitCodes:
         assert "Transcription error" in data["message"]
 
 
+@pytest.mark.parametrize(
+    "kind", ["audio", "video", "report", "quiz", "flashcards", "infographic", "slide-deck"]
+)
 @pytest.mark.parametrize("json_output", [False, True])
-def test_generate_audio_later_reports_scheduled(runner, monkeypatch, json_output):
+def test_generate_later_reports_scheduled(runner, monkeypatch, json_output, kind):
     from notebooklm.types import GenerationStatus
 
     client = create_mock_client()
-    client.artifacts.generate_audio = AsyncMock(
-        return_value=GenerationStatus(task_id="deferred-audio", status="scheduled")
-    )
-    args = ["generate", "audio", "-n", "nb_123", "--later"]
+    method = AsyncMock(return_value=GenerationStatus(task_id="deferred-audio", status="scheduled"))
+    method_name = "generate_" + kind.replace("-", "_")
+    setattr(client.artifacts, method_name, method)
+    args = ["generate", kind, "-n", "nb_123", "--later"]
     if json_output:
         args.append("--json")
     monkeypatch.setattr(
@@ -2261,7 +2264,7 @@ def test_generate_audio_later_reports_scheduled(runner, monkeypatch, json_output
     )
     result = runner.invoke(cli, args, obj=inject_client(client))
     assert result.exit_code == 0, result.output
-    assert client.artifacts.generate_audio.await_args.kwargs["later"] is True
+    assert getattr(client.artifacts, method_name).await_args.kwargs["later"] is True
     client.artifacts.wait_for_completion.assert_not_called()
     if json_output:
         assert json.loads(result.output) == {"task_id": "deferred-audio", "status": "scheduled"}
@@ -2270,10 +2273,14 @@ def test_generate_audio_later_reports_scheduled(runner, monkeypatch, json_output
         assert "Started:" not in result.output
 
 
+@pytest.mark.parametrize(
+    "kind", ["audio", "video", "report", "quiz", "flashcards", "infographic", "slide-deck"]
+)
 @pytest.mark.parametrize("json_output", [False, True])
-def test_generate_audio_later_rejects_wait_before_generation(runner, monkeypatch, json_output):
+def test_generate_later_rejects_wait_before_generation(runner, monkeypatch, json_output, kind):
     client = create_mock_client()
-    args = ["generate", "audio", "-n", "nb_123", "--later", "--wait"]
+    method_name = "generate_" + kind.replace("-", "_")
+    args = ["generate", kind, "-n", "nb_123", "--later", "--wait"]
     if json_output:
         args.append("--json")
     monkeypatch.setattr(
@@ -2284,4 +2291,23 @@ def test_generate_audio_later_rejects_wait_before_generation(runner, monkeypatch
     result = runner.invoke(cli, args, obj=inject_client(client))
     assert result.exit_code != 0
     assert "--later cannot be combined with --wait" in result.output
-    client.artifacts.generate_audio.assert_not_called()
+    getattr(client.artifacts, method_name).assert_not_called()
+
+
+@pytest.mark.parametrize("args", [["video", "--format", "cinematic"], ["cinematic-video"]])
+@pytest.mark.parametrize("json_output", [False, True])
+def test_cinematic_later_rejected_before_generation(runner, monkeypatch, args, json_output):
+    client = create_mock_client()
+    monkeypatch.setattr(
+        helpers_module,
+        "get_auth_tokens",
+        lambda _ctx: auth_module.AuthTokens(cookies={}, csrf_token="csrf", session_id="session"),
+    )
+    command = ["generate", *args, "-n", "nb_123", "--later"]
+    if json_output:
+        command.append("--json")
+    result = runner.invoke(cli, command, obj=inject_client(client))
+    assert result.exit_code != 0
+    assert "Deferred generation is not supported" in result.output
+    client.artifacts.generate_video.assert_not_called()
+    client.artifacts.generate_cinematic_video.assert_not_called()
