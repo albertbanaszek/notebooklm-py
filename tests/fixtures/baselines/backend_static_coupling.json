@@ -8735,7 +8735,7 @@
     },
     {
       "kind": "from",
-      "lineno": 19,
+      "lineno": 20,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.cli.generate_cmd",
@@ -8744,7 +8744,7 @@
     },
     {
       "kind": "from",
-      "lineno": 20,
+      "lineno": 21,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.cli.generate_cmd",
@@ -8753,7 +8753,7 @@
     },
     {
       "kind": "from",
-      "lineno": 21,
+      "lineno": 22,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.cli.generate_cmd",
@@ -8762,7 +8762,7 @@
     },
     {
       "kind": "from",
-      "lineno": 38,
+      "lineno": 39,
       "scope": null,
       "scope_kind": "module",
       "source": "notebooklm.cli.generate_cmd",
@@ -11916,7 +11916,7 @@
       "modules": 33
     },
     "cli": {
-      "lines": 23094,
+      "lines": 23116,
       "modules": 76
     },
     "mcp": {
@@ -11949,7 +11949,7 @@
     }
   },
   "summary": {
-    "authored_lines": 155971,
+    "authored_lines": 155993,
     "authored_modules": 498,
     "class_local_edges": 0,
     "cross_subsystem_edges": 1311,

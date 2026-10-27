@@ -67,9 +67,9 @@ async def test_deferred_studio_is_scheduled_and_persisted(backend, family):
 @pytest.mark.parametrize("backend,kind", [("web", "report"), ("android", "quiz")])
 async def test_cli_deferred_generation_is_persisted(backend, kind):
     """Verify real CLI scheduling through an independent API read and owned cleanup."""
-    config = ClientConfig(
-        backend=AndroidBackendConfig() if backend == "android" else WebBackendConfig()
-    )
+    # Keep gRPC channels out of the parent while spawning a fresh CLI process.
+    # Reading Android-created artifacts through Web also checks cross-backend persistence.
+    config = ClientConfig(backend=WebBackendConfig())
     async with NotebookLMClient.from_storage(config=config) as client:
         notebook = await client.notebooks.create(f"E2E #2519 disposable CLI {backend} {kind}")
         try:
@@ -104,7 +104,7 @@ async def test_cli_deferred_generation_is_persisted(backend, kind):
                 if process.returncode is None:
                     process.kill()
                     await process.wait()
-            assert process.returncode == 0, stderr.decode()
+            assert process.returncode == 0, (stdout.decode(), stderr.decode())
             result = json.loads(stdout)
             assert result["status"] == "scheduled", result
             artifact = await client.artifacts.get(notebook.id, result["task_id"])

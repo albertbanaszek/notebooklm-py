@@ -11,6 +11,7 @@ remain imported at module scope and ``_output_mind_map_result`` +
 
 import contextlib
 import os
+from functools import wraps
 from typing import Any
 
 import click
@@ -451,6 +452,27 @@ def generate():
     pass
 
 
+def _with_deferred_client(f):
+    """Validate deferred CLI flags before authentication can perform network I/O."""
+    authenticated = with_client(f)
+
+    @wraps(f)
+    @click.pass_context
+    def wrapper(ctx, *args, **kwargs):
+        """Fail fast for conflicting or unsupported deferred generation flags."""
+        if kwargs.get("later"):
+            message = None
+            if kwargs.get("wait"):
+                message = "--later cannot be combined with --wait"
+            elif kwargs.get("video_format") == "cinematic" or ctx.info_name == "cinematic-video":
+                message = "Deferred generation is not supported for cinematic video"
+            if message is not None:
+                output_error(message, "VALIDATION_ERROR", kwargs.get("json_output", False), 1)
+        return authenticated(*args, **kwargs)
+
+    return wrapper
+
+
 @generate.command("audio")
 @click.option("--later", is_flag=True, help="Queue generation for later (usually a few hours).")
 @click.argument("description", default="", required=False)
@@ -476,7 +498,7 @@ def generate():
 @wait_polling_options(default_timeout=1200, default_interval=2)
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_audio(
     ctx,
     description,
@@ -570,7 +592,7 @@ def generate_audio(
 )
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_video(
     ctx,
     description,
@@ -696,7 +718,7 @@ alias_command(
 @wait_polling_options(default_timeout=300, default_interval=2)
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_slide_deck(
     ctx,
     description,
@@ -825,7 +847,7 @@ def generate_revise_slide(
 @wait_polling_options(default_timeout=300, default_interval=2)
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_quiz(
     ctx,
     description,
@@ -890,7 +912,7 @@ def generate_quiz(
 @wait_polling_options(default_timeout=300, default_interval=2)
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_flashcards(
     ctx,
     description,
@@ -962,7 +984,7 @@ def generate_flashcards(
 @wait_polling_options(default_timeout=300, default_interval=2)
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_infographic(
     ctx,
     description,
@@ -1134,7 +1156,7 @@ def generate_mind_map(
 @wait_polling_options(default_timeout=300, default_interval=2)
 @retry_option
 @json_option
-@with_client
+@_with_deferred_client
 def generate_report_cmd(
     ctx,
     description,
