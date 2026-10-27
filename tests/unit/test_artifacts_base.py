@@ -132,7 +132,19 @@ def test_creation_capabilities_are_immutable_implementation_metadata() -> None:
         "video_format",
         "video_style",
         "style_prompt",
+        "later",
     )
+    deferred_families = {
+        "audio",
+        "video",
+        "report",
+        "quiz",
+        "flashcards",
+        "infographic",
+        "slide_deck",
+    }
+    for capability in capabilities:
+        assert ("later" in capability.supported_options) == (capability.family in deferred_families)
 
 
 @pytest.mark.asyncio
