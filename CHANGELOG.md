@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-10-28
+
 ### Added
+
+- **Deferred audio generation (#2506).** Queue audio overviews with `later=True`
+  in Python or `--later` in the CLI on Web and Android.
 
 - **Deferred Studio generation (#2519).** Queue videos, reports (including study
   guides), quizzes, flashcards, infographics and slide decks with `later=True`
@@ -37,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy no longer applies.
 
 ### Fixed
+
+- **Fresh installs include `typing_extensions` (#2500).** Declare the runtime
+  dependency used by public type exports.
+- **Synchronous cookie recovery honors the selected transport (#2504).**
+  Curl-backed recovery uses the supported curl_cffi runtime.
+- Updated locked dependencies to address reported vulnerabilities (#2513).
 
 - **An uppercase full UUID now reaches the right notebook, source, note or
   artifact.** The CLI and MCP resolvers passed a full UUID through in the case
@@ -2987,7 +2998,8 @@ This is the initial public release of `notebooklm-py`. While core functionality 
 - **Authentication expiry**: CSRF tokens expire after some time. Re-run `notebooklm login` if you encounter auth errors.
 - **Large file uploads**: Files over 50MB may fail or timeout. Split large documents if needed.
 
-[Unreleased]: https://github.com/teng-lin/notebooklm-py/compare/v0.8.5...HEAD
+[Unreleased]: https://github.com/teng-lin/notebooklm-py/compare/v0.8.6...HEAD
+[0.8.6]: https://github.com/teng-lin/notebooklm-py/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/teng-lin/notebooklm-py/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/teng-lin/notebooklm-py/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/teng-lin/notebooklm-py/compare/v0.8.2...v0.8.3
