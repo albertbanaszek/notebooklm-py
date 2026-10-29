@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Android owned notebooks can be removed from recent views without an error.**
+  Google now returns `INVALID_ARGUMENT` for this no-op. The client verifies
+  explicit ownership before accepting that response; failures for shared,
+  missing, or unreadable notebooks still raise an error.
+
 - **Fresh installs include `typing_extensions` (#2500).** Declare the runtime
   dependency used by public type exports.
 - **Synchronous cookie recovery honors the selected transport (#2504).**
